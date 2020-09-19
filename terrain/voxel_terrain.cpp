@@ -367,10 +367,12 @@ namespace {
 struct ScheduleSaveAction {
 	std::vector<VoxelTerrain::BlockToSave> &blocks_to_save;
 	bool with_copy;
+	World *world;
 
 	void operator()(VoxelBlock *block) {
 		// TODO Don't ask for save if the stream doesn't support it!
 		if (block->is_modified()) {
+			block->set_world(world);
 			//print_line(String("Scheduling save for block {0}").format(varray(block->position.to_vec3())));
 			VoxelTerrain::BlockToSave b;
 			if (with_copy) {
@@ -393,7 +395,7 @@ void VoxelTerrain::immerge_block(Vector3i bpos) {
 	_map->remove_block(bpos, [this, bpos](VoxelBlock *block) {
 		emit_block_unloaded(block);
 		// Note: no need to copy the block because it gets removed from the map anyways
-		ScheduleSaveAction{ _blocks_to_save, false }(block);
+		ScheduleSaveAction{ _blocks_to_save, false, *get_world() }(block);
 	});
 
 	_loading_blocks.erase(bpos);
@@ -412,7 +414,13 @@ void VoxelTerrain::immerge_block(Vector3i bpos) {
 
 void VoxelTerrain::save_all_modified_blocks(bool with_copy) {
 	// That may cause a stutter, so should be used when the player won't notice
-	_map->for_all_blocks(ScheduleSaveAction{ _blocks_to_save, with_copy });
+	World* world;
+	if (is_inside_world()) {
+		world = *get_world();
+	} else {
+		world = nullptr;
+	}
+	_map->for_all_blocks(ScheduleSaveAction{ _blocks_to_save, with_copy, world });
 	// And flush immediately
 	send_block_data_requests();
 }
@@ -1282,7 +1290,7 @@ void VoxelTerrain::_b_save_block(Vector3 p_block_pos) {
 		return;
 	}
 
-	ScheduleSaveAction{ _blocks_to_save, true }(block);
+	ScheduleSaveAction{ _blocks_to_save, true, *get_world() }(block);
 }
 
 void VoxelTerrain::_bind_methods() {

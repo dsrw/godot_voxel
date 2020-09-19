@@ -106,7 +106,7 @@ void VoxelToolTerrain::_post_edit(const Rect3i &box) {
 
 void VoxelToolTerrain::set_voxel_metadata(Vector3i pos, Variant meta) {
 	ERR_FAIL_COND(_terrain == nullptr);
-	VoxelBlock *block = _map->get_block(_map->voxel_to_block(pos));
+	VoxelBlock *block = _map->get_or_create_block_at_voxel_pos(pos);
 	ERR_FAIL_COND_MSG(block == nullptr, "Area not editable");
 	RWLockWrite lock(block->voxels->get_lock());
 	block->voxels->set_voxel_metadata(_map->to_local(pos), meta);
