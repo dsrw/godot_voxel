@@ -15,7 +15,7 @@ class VoxelMesherBlocky : public VoxelMesher {
 	GDCLASS(VoxelMesherBlocky, VoxelMesher)
 
 public:
-	static const unsigned int MAX_MATERIALS = 8; // Arbitrary. Tweak if needed.
+	static const unsigned int MAX_MATERIALS = 512; // Arbitrary. Tweak if needed.
 	static const int PADDING = 1;
 
 	VoxelMesherBlocky();
