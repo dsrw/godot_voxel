@@ -14,7 +14,7 @@ DirectStaticBody::~DirectStaticBody() {
 void DirectStaticBody::create() {
 	ERR_FAIL_COND(_body.is_valid());
 	PhysicsServer &ps = *PhysicsServer::get_singleton();
-	_body = ps.body_create(PhysicsServer::BODY_MODE_STATIC);
+	_body = ps.body_create(PhysicsServer::BODY_MODE_KINEMATIC);
 	ps.body_set_ray_pickable(_body, false);
 }
 
