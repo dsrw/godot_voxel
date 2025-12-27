@@ -173,7 +173,7 @@ private:
 		// Can't use `HashMap` because it lacks move semantics.
 		std::unordered_map<Vector3i, std::unique_ptr<VoxelInstanceBlockData>> loaded_instances_data;
 
-		FixedArray<MeshLodDistances, VoxelInstanceLibraryItem::MAX_MESH_LODS> mesh_lod_distances;
+		VoxelFixedArray<MeshLodDistances, VoxelInstanceLibraryItem::MAX_MESH_LODS> mesh_lod_distances;
 
 		Lod() = default;
 		Lod(const Lod &) = delete; // non construction-copyable
@@ -182,7 +182,7 @@ private:
 
 	UpMode _up_mode = UP_MODE_POSITIVE_Y;
 
-	FixedArray<Lod, MAX_LOD> _lods;
+	VoxelFixedArray<Lod, MAX_LOD> _lods;
 	std::vector<Block *> _blocks; // Does not have nulls
 	HashMap<int, Layer> _layers; // Each layer corresponds to a library item
 	Ref<VoxelInstanceLibrary> _library;

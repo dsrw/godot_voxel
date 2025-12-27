@@ -201,7 +201,7 @@ private:
 	}
 
 private:
-	FixedArray<uint8_t, MAX_ISLANDS> _equivalences;
+	VoxelFixedArray<uint8_t, MAX_ISLANDS> _equivalences;
 };
 
 #endif // ISLAND_FINDER_H

@@ -245,7 +245,7 @@ VoxelGraphNodeDB::VoxelGraphNodeDB() {
 	typedef VoxelGraphRuntime::ProcessBufferContext ProcessBufferContext;
 	typedef VoxelGraphRuntime::RangeAnalysisContext RangeAnalysisContext;
 
-	FixedArray<NodeType, VoxelGeneratorGraph::NODE_TYPE_COUNT> &types = _types;
+	VoxelFixedArray<NodeType, VoxelGeneratorGraph::NODE_TYPE_COUNT> &types = _types;
 
 	// TODO Most operations need SIMD support
 

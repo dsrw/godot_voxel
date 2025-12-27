@@ -59,7 +59,7 @@ private:
 	void _b_set_mesh_lod2(Ref<Mesh> mesh) { set_mesh(mesh, 2); }
 	void _b_set_mesh_lod3(Ref<Mesh> mesh) { set_mesh(mesh, 3); }
 
-	FixedArray<Ref<Mesh>, MAX_MESH_LODS> _mesh_lods;
+	VoxelFixedArray<Ref<Mesh>, MAX_MESH_LODS> _mesh_lods;
 	unsigned int _mesh_lod_count = 1;
 
 	// It is preferred to have materials on the mesh already,

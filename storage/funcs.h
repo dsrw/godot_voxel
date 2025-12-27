@@ -129,8 +129,8 @@ static inline uint16_t real_to_quantized_u16(float v) {
 	return norm_to_u16(v * VoxelConstants::QUANTIZED_SDF_16_BITS_SCALE);
 }*/
 
-inline FixedArray<uint8_t, 4> decode_weights_from_packed_u16(uint16_t packed_weights) {
-	FixedArray<uint8_t, 4> weights;
+inline VoxelFixedArray<uint8_t, 4> decode_weights_from_packed_u16(uint16_t packed_weights) {
+	VoxelFixedArray<uint8_t, 4> weights;
 	// SIMDable?
 	// weights[0] = ((packed_weights >> 0) & 0x0f) << 4;
 	// weights[1] = ((packed_weights >> 4) & 0x0f) << 4;
@@ -153,8 +153,8 @@ inline FixedArray<uint8_t, 4> decode_weights_from_packed_u16(uint16_t packed_wei
 	return weights;
 }
 
-inline FixedArray<uint8_t, 4> decode_indices_from_packed_u16(uint16_t packed_indices) {
-	FixedArray<uint8_t, 4> indices;
+inline VoxelFixedArray<uint8_t, 4> decode_indices_from_packed_u16(uint16_t packed_indices) {
+	VoxelFixedArray<uint8_t, 4> indices;
 	// SIMDable?
 	indices[0] = (packed_indices >> 0) & 0x0f;
 	indices[1] = (packed_indices >> 4) & 0x0f;
@@ -172,8 +172,8 @@ inline uint16_t encode_weights_to_packed_u16(uint8_t a, uint8_t b, uint8_t c, ui
 }
 
 // Checks if there are no duplicate indices in any voxel
-inline void debug_check_texture_indices(FixedArray<uint8_t, 4> indices) {
-	FixedArray<bool, 16> checked;
+inline void debug_check_texture_indices(VoxelFixedArray<uint8_t, 4> indices) {
+	VoxelFixedArray<bool, 16> checked;
 	checked.fill(false);
 	for (unsigned int i = 0; i < indices.size(); ++i) {
 		unsigned int ti = indices[i];

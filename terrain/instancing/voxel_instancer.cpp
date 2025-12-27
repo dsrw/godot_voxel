@@ -181,7 +181,7 @@ void VoxelInstancer::process_mesh_lods() {
 	{
 		const int block_region_extent = _parent->get_mesh_block_region_extent();
 
-		FixedArray<float, 4> coeffs;
+		VoxelFixedArray<float, 4> coeffs;
 		coeffs[0] = 0;
 		coeffs[1] = 0.1;
 		coeffs[2] = 0.25;

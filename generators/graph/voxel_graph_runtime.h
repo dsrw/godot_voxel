@@ -456,7 +456,7 @@ private:
 		// Address within the State's array of buffers where the Z input may be.
 		int z_input_address = -1;
 
-		FixedArray<OutputInfo, MAX_OUTPUTS> outputs;
+		VoxelFixedArray<OutputInfo, MAX_OUTPUTS> outputs;
 		unsigned int outputs_count = 0;
 
 		// Maximum amount of buffers this program will need to do a full run.

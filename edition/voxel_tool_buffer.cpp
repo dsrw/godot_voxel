@@ -93,7 +93,7 @@ void VoxelToolBuffer::paste(Vector3i p_pos, Ref<VoxelBuffer> p_voxels, uint8_t c
 	}
 
 	unsigned int channel_count;
-	FixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels =
+	VoxelFixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels =
 			VoxelBufferInternal::mask_to_channels_list(channels_mask, channel_count);
 
 	const Vector3i box_max = box.pos + box.size;

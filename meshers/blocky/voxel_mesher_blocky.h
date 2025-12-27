@@ -68,7 +68,7 @@ private:
 	};
 
 	struct Cache {
-		FixedArray<Arrays, MAX_MATERIALS> arrays_per_material;
+		VoxelFixedArray<Arrays, MAX_MATERIALS> arrays_per_material;
 	};
 
 	// Parameters

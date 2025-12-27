@@ -330,9 +330,9 @@ static void bake_mesh_geometry(Voxel &config, Voxel::BakedData &baked_data, bool
 		PoolVector2Array::Read uvs_read = uvs.read();
 		PoolVector<float>::Read tangents_read = tangents.read();
 
-		FixedArray<HashMap<int, int>, Cube::SIDE_COUNT> added_side_indices;
+		VoxelFixedArray<HashMap<int, int>, Cube::SIDE_COUNT> added_side_indices;
 		HashMap<int, int> added_regular_indices;
-		FixedArray<Vector3, 3> tri_positions;
+		VoxelFixedArray<Vector3, 3> tri_positions;
 
 		Voxel::BakedData::Model &model = baked_data.model;
 
@@ -343,7 +343,7 @@ static void bake_mesh_geometry(Voxel &config, Voxel::BakedData &baked_data, bool
 			tri_positions[1] = positions_read[indices_read[i + 1]];
 			tri_positions[2] = positions_read[indices_read[i + 2]];
 
-			FixedArray<float, 4> tangent;
+			VoxelFixedArray<float, 4> tangent;
 
 			if (tangents_empty && bake_tangents) {
 				//If tangents are empty then we calculate them

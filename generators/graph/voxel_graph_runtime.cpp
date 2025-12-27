@@ -437,7 +437,7 @@ bool VoxelGraphRuntime::is_operation_constant(const State &state, uint16_t op_ad
 
 void VoxelGraphRuntime::generate_optimized_execution_map(const State &state, ExecutionMap &execution_map,
 		bool debug) const {
-	FixedArray<unsigned int, MAX_OUTPUTS> all_outputs;
+	VoxelFixedArray<unsigned int, MAX_OUTPUTS> all_outputs;
 	for (unsigned int i = 0; i < _program.outputs_count; ++i) {
 		all_outputs[i] = i;
 	}

@@ -58,7 +58,7 @@ public:
 			bool used = false;
 		};
 
-		FixedArray<Channel, VoxelBuffer::MAX_CHANNELS> channels;
+		VoxelFixedArray<Channel, VoxelBuffer::MAX_CHANNELS> channels;
 	};
 
 	enum BlockType {

@@ -207,7 +207,7 @@ VoxelGraphEditor::VoxelGraphEditor() {
 	add_child(vbox_container);
 
 	_context_menu = memnew(PopupMenu);
-	FixedArray<PopupMenu *, VoxelGraphNodeDB::CATEGORY_COUNT> category_menus;
+	VoxelFixedArray<PopupMenu *, VoxelGraphNodeDB::CATEGORY_COUNT> category_menus;
 	for (unsigned int i = 0; i < category_menus.size(); ++i) {
 		String name = VoxelGraphNodeDB::get_category_name(VoxelGraphNodeDB::Category(i));
 		PopupMenu *menu = memnew(PopupMenu);

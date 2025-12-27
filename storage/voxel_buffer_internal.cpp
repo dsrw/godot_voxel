@@ -201,7 +201,7 @@ void VoxelBufferInternal::clear_channel_f(unsigned int channel_index, real_t cle
 	clear_channel(channel_index, real_to_raw_voxel(clear_value, channel.depth));
 }
 
-void VoxelBufferInternal::set_default_values(FixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> values) {
+void VoxelBufferInternal::set_default_values(VoxelFixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> values) {
 	for (unsigned int i = 0; i < MAX_CHANNELS; ++i) {
 		_channels[i].defval = clamp_value_for_depth(values[i], _channels[i].depth);
 	}

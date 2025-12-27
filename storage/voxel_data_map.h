@@ -179,7 +179,7 @@ private:
 
 private:
 	// Voxel values that will be returned if access is out of map bounds
-	FixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> _default_voxel;
+	VoxelFixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> _default_voxel;
 
 	// Blocks stored with a spatial hash in all 3D directions.
 	// Before I used Godot's HashMap with RELATIONSHIP = 2 because that delivers better performance compared to
@@ -211,7 +211,7 @@ struct VoxelDataLodMap {
 		// It is possible to unlock it after we are done querying the map.
 		RWLock map_lock;
 	};
-	FixedArray<Lod, VoxelConstants::MAX_LOD> lods;
+	VoxelFixedArray<Lod, VoxelConstants::MAX_LOD> lods;
 	unsigned int lod_count = 1;
 };
 

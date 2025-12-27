@@ -51,7 +51,7 @@ inline bool contributes_to_ao(const VoxelLibrary::BakedData &lib, uint32_t voxel
 
 template <typename Type_T>
 static void generate_blocky_mesh(
-		FixedArray<VoxelMesherBlocky::Arrays, VoxelMesherBlocky::MAX_MATERIALS> &out_arrays_per_material,
+		VoxelFixedArray<VoxelMesherBlocky::Arrays, VoxelMesherBlocky::MAX_MATERIALS> &out_arrays_per_material,
 		const Span<Type_T> type_buffer,
 		const Vector3i block_size,
 		const VoxelLibrary::BakedData &library,
@@ -72,7 +72,7 @@ static void generate_blocky_mesh(
 
 	int index_offsets[VoxelMesherBlocky::MAX_MATERIALS] = { 0 };
 
-	FixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut;
+	VoxelFixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut;
 	side_neighbor_lut[Cube::SIDE_LEFT] = row_size;
 	side_neighbor_lut[Cube::SIDE_RIGHT] = -row_size;
 	side_neighbor_lut[Cube::SIDE_BACK] = -deck_size;
@@ -80,7 +80,7 @@ static void generate_blocky_mesh(
 	side_neighbor_lut[Cube::SIDE_BOTTOM] = -1;
 	side_neighbor_lut[Cube::SIDE_TOP] = 1;
 
-	FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut;
+	VoxelFixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut;
 	edge_neighbor_lut[Cube::EDGE_BOTTOM_BACK] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_BACK];
 	edge_neighbor_lut[Cube::EDGE_BOTTOM_FRONT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_FRONT];
 	edge_neighbor_lut[Cube::EDGE_BOTTOM_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_LEFT];
@@ -94,7 +94,7 @@ static void generate_blocky_mesh(
 	edge_neighbor_lut[Cube::EDGE_TOP_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_LEFT];
 	edge_neighbor_lut[Cube::EDGE_TOP_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_RIGHT];
 
-	FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut;
+	VoxelFixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut;
 
 	corner_neighbor_lut[Cube::CORNER_BOTTOM_BACK_LEFT] =
 			side_neighbor_lut[Cube::SIDE_BOTTOM] +

@@ -128,7 +128,7 @@ private:
 	void create_thread(ThreadData &d, uint32_t i);
 	void destroy_all_threads();
 
-	FixedArray<ThreadData, MAX_THREADS> _threads;
+	VoxelFixedArray<ThreadData, MAX_THREADS> _threads;
 	uint32_t _thread_count = 0;
 
 	// TODO Optimization: use a less naive design? Maybe moodycamel

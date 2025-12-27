@@ -37,7 +37,7 @@ private:
 
 	static void _bind_methods();
 
-	FixedArray<Color8, MAX_COLORS> _colors;
+	VoxelFixedArray<Color8, MAX_COLORS> _colors;
 };
 
 #endif // VOXEL_COLOR_PALETTE_H

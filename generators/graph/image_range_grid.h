@@ -34,7 +34,7 @@ private:
 
 	Interval _total_range;
 
-	FixedArray<Lod, MAX_LODS> _lods;
+	VoxelFixedArray<Lod, MAX_LODS> _lods;
 };
 
 #endif // IMAGE_RANGE_GRID_H

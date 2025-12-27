@@ -224,7 +224,7 @@ void test_voxel_data_map_copy() {
 }
 
 void test_encode_weights_packed_u16() {
-	FixedArray<uint8_t, 4> weights;
+	VoxelFixedArray<uint8_t, 4> weights;
 	// There is data loss of the 4 smaller bits in this encoding,
 	// so to test this we may use values greater than 16.
 	// There is a compromise in decoding, where we choose that only values multiple of 16 are bijective.
@@ -233,7 +233,7 @@ void test_encode_weights_packed_u16() {
 	weights[2] = 10 << 4;
 	weights[3] = 15 << 4;
 	const uint16_t encoded_weights = encode_weights_to_packed_u16(weights[0], weights[1], weights[2], weights[3]);
-	FixedArray<uint8_t, 4> decoded_weights = decode_weights_from_packed_u16(encoded_weights);
+	VoxelFixedArray<uint8_t, 4> decoded_weights = decode_weights_from_packed_u16(encoded_weights);
 	ERR_FAIL_COND(weights != decoded_weights);
 }
 
@@ -448,8 +448,8 @@ void test_voxel_graph_generator_texturing() {
 					bool weight0_must_be_1, bool weight1_must_be_1) {
 				const uint16_t encoded_indices = buffer.get_voxel(pos, VoxelBufferInternal::CHANNEL_INDICES);
 				const uint16_t encoded_weights = buffer.get_voxel(pos, VoxelBufferInternal::CHANNEL_WEIGHTS);
-				const FixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(encoded_indices);
-				const FixedArray<uint8_t, 4> weights = decode_weights_from_packed_u16(encoded_weights);
+				const VoxelFixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(encoded_indices);
+				const VoxelFixedArray<uint8_t, 4> weights = decode_weights_from_packed_u16(encoded_weights);
 				for (unsigned int i = 0; i < indices.size(); ++i) {
 					switch (indices[i]) {
 						case 0:
@@ -819,7 +819,7 @@ void test_transform_3d_array_zxy() {
 	const Vector3i src_size(3, 4, 2);
 	const int volume = src_size.volume();
 
-	FixedArray<int, 24> dst_grid;
+	VoxelFixedArray<int, 24> dst_grid;
 	ERR_FAIL_COND(dst_grid.size() != volume);
 
 	{

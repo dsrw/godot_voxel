@@ -123,7 +123,7 @@ private:
 
 	Ref<ShaderMaterial> _shader_material;
 	DirectMeshInstance _mesh_instance;
-	FixedArray<DirectMeshInstance, Cube::SIDE_COUNT> _transition_mesh_instances;
+	VoxelFixedArray<DirectMeshInstance, Cube::SIDE_COUNT> _transition_mesh_instances;
 	DirectStaticBody _static_body;
 	Ref<World> _world;
 

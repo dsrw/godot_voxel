@@ -7,7 +7,7 @@
 
 namespace VoxelDebug {
 
-FixedArray<Ref<Mesh>, ID_COUNT> g_wirecubes;
+VoxelFixedArray<Ref<Mesh>, ID_COUNT> g_wirecubes;
 bool g_finalized = false;
 
 template <typename T>

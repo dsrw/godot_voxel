@@ -102,7 +102,7 @@ private:
 	};
 
 	struct Cache {
-		FixedArray<Arrays, MATERIAL_COUNT> arrays_per_material;
+		VoxelFixedArray<Arrays, MATERIAL_COUNT> arrays_per_material;
 		std::vector<uint8_t> mask_memory_pool;
 		GreedyAtlasData greedy_atlas_data;
 	};

@@ -1,16 +1,16 @@
-#ifndef FIXED_ARRAY_H
-#define FIXED_ARRAY_H
+#ifndef VOXEL_FIXED_ARRAY_H
+#define VOXEL_FIXED_ARRAY_H
 
 #include <core/error_macros.h>
 
 // TODO Could use std::array, but due to how Godot compiles,
 // I couldn't find a way to enable boundary checks without failing to link my module with the rest of Godot...
 template <typename T, unsigned int N>
-class FixedArray {
+class VoxelFixedArray {
 public:
-	inline FixedArray() {}
+	inline VoxelFixedArray() {}
 
-	inline FixedArray(T defval) {
+	inline VoxelFixedArray(T defval) {
 		fill(defval);
 	}
 
@@ -36,7 +36,7 @@ public:
 		return _data[i];
 	}
 
-	inline bool equals(const FixedArray<T, N> &other) const {
+	inline bool equals(const VoxelFixedArray<T, N> &other) const {
 		for (unsigned int i = 0; i < N; ++i) {
 			if (_data[i] != other._data[i]) {
 				return false;
@@ -45,15 +45,15 @@ public:
 		return true;
 	}
 
-	inline bool operator==(const FixedArray<T, N> &other) const {
+	inline bool operator==(const VoxelFixedArray<T, N> &other) const {
 		return equals(other);
 	}
 
-	inline bool operator!=(const FixedArray<T, N> &other) const {
+	inline bool operator!=(const VoxelFixedArray<T, N> &other) const {
 		return !equals(other);
 	}
 
-	inline void operator=(const FixedArray<T, N> &other) {
+	inline void operator=(const VoxelFixedArray<T, N> &other) {
 		for (unsigned int i = 0; i < N; ++i) {
 			_data[i] = other._data[i];
 		}
@@ -75,4 +75,4 @@ private:
 	T _data[N];
 };
 
-#endif // FIXED_ARRAY_H
+#endif // VOXEL_FIXED_ARRAY_H

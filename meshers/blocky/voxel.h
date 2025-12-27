@@ -34,12 +34,12 @@ public:
 			// Model sides:
 			// They are separated because this way we can occlude them easily.
 			// Due to these defining cube side triangles, normals are known already.
-			FixedArray<std::vector<Vector3>, Cube::SIDE_COUNT> side_positions;
-			FixedArray<std::vector<Vector2>, Cube::SIDE_COUNT> side_uvs;
-			FixedArray<std::vector<int>, Cube::SIDE_COUNT> side_indices;
-			FixedArray<std::vector<float>, Cube::SIDE_COUNT> side_tangents;
+			VoxelFixedArray<std::vector<Vector3>, Cube::SIDE_COUNT> side_positions;
+			VoxelFixedArray<std::vector<Vector2>, Cube::SIDE_COUNT> side_uvs;
+			VoxelFixedArray<std::vector<int>, Cube::SIDE_COUNT> side_indices;
+			VoxelFixedArray<std::vector<float>, Cube::SIDE_COUNT> side_tangents;
 
-			FixedArray<uint32_t, Cube::SIDE_COUNT> side_pattern_indices;
+			VoxelFixedArray<uint32_t, Cube::SIDE_COUNT> side_pattern_indices;
 
 			void clear() {
 				positions.clear();
@@ -168,7 +168,7 @@ private:
 
 	Color _color;
 	GeometryType _geometry_type;
-	FixedArray<Vector2, Cube::SIDE_COUNT> _cube_tiles;
+	VoxelFixedArray<Vector2, Cube::SIDE_COUNT> _cube_tiles;
 	Ref<Mesh> _custom_mesh;
 	std::vector<AABB> _collision_aabbs;
 	bool _random_tickable = false;

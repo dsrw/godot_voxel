@@ -1035,7 +1035,7 @@ static void copy_block_and_neighbors(Span<std::shared_ptr<VoxelBufferInternal>> 
 
 	// Extract wanted channels in a list
 	unsigned int channels_count = 0;
-	FixedArray<uint8_t, VoxelBuffer::MAX_CHANNELS> channels =
+	VoxelFixedArray<uint8_t, VoxelBuffer::MAX_CHANNELS> channels =
 			VoxelBufferInternal::mask_to_channels_list(channels_mask, channels_count);
 
 	// Determine size of the cube of blocks

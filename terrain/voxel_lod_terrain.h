@@ -372,7 +372,7 @@ private:
 		}
 	};
 
-	FixedArray<Lod, VoxelConstants::MAX_LOD> _lods;
+	VoxelFixedArray<Lod, VoxelConstants::MAX_LOD> _lods;
 	unsigned int _lod_count = 0;
 	// Distance between a viewer and the end of LOD0
 	float _lod_distance = 0.f;

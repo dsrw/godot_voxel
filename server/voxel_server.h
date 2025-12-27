@@ -72,7 +72,7 @@ public:
 
 	struct BlockMeshInput {
 		// Moore area ordered by forward XYZ iteration
-		FixedArray<std::shared_ptr<VoxelBufferInternal>, VoxelConstants::MAX_BLOCK_COUNT_PER_REQUEST> data_blocks;
+		VoxelFixedArray<std::shared_ptr<VoxelBufferInternal>, VoxelConstants::MAX_BLOCK_COUNT_PER_REQUEST> data_blocks;
 		unsigned int data_blocks_count = 0;
 		Vector3i render_block_position;
 		uint8_t lod = 0;
@@ -367,9 +367,9 @@ private:
 		bool is_cancelled() override;
 		void apply_result() override;
 
-		FixedArray<std::shared_ptr<VoxelBufferInternal>, VoxelConstants::MAX_BLOCK_COUNT_PER_REQUEST> blocks;
+		VoxelFixedArray<std::shared_ptr<VoxelBufferInternal>, VoxelConstants::MAX_BLOCK_COUNT_PER_REQUEST> blocks;
 		// TODO Need to provide format
-		//FixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channel_depths;
+		//VoxelFixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channel_depths;
 		Vector3i position; // In mesh blocks of the specified lod
 		uint32_t volume_id;
 		uint8_t lod;

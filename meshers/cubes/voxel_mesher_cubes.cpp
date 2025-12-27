@@ -61,7 +61,7 @@ inline uint8_t get_alpha_index(Color8 c) {
 
 template <typename Voxel_T, typename Color_F>
 void build_voxel_mesh_as_simple_cubes(
-		FixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
+		VoxelFixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
 		const Span<Voxel_T> voxel_buffer,
 		const Vector3i block_size,
 		Color_F color_func) {
@@ -76,12 +76,12 @@ void build_voxel_mesh_as_simple_cubes(
 	const unsigned int deck_size = block_size.x * row_size;
 
 	// Note: voxel buffers are indexed in ZXY order
-	FixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
+	VoxelFixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
 	neighbor_offset_d_lut[Vector3i::AXIS_X] = block_size.y;
 	neighbor_offset_d_lut[Vector3i::AXIS_Y] = 1;
 	neighbor_offset_d_lut[Vector3i::AXIS_Z] = block_size.x * block_size.y;
 
-	FixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
+	VoxelFixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
 
 	// For each axis
 	for (unsigned int za = 0; za < Vector3i::AXIS_COUNT; ++za) {
@@ -93,7 +93,7 @@ void build_voxel_mesh_as_simple_cubes(
 			// For each cell of the deck, gather face info
 			for (unsigned int fy = min_pos[ya]; fy < (unsigned int)max_pos[ya]; ++fy) {
 				for (unsigned int fx = min_pos[xa]; fx < (unsigned int)max_pos[xa]; ++fx) {
-					FixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
+					VoxelFixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
 					pos[xa] = fx;
 					pos[ya] = fy;
 					pos[za] = d;
@@ -194,7 +194,7 @@ void build_voxel_mesh_as_simple_cubes(
 
 template <typename Voxel_T, typename Color_F>
 void build_voxel_mesh_as_greedy_cubes(
-		FixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
+		VoxelFixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
 		const Span<Voxel_T> voxel_buffer,
 		const Vector3i block_size,
 		std::vector<uint8_t> &mask_memory_pool,
@@ -223,12 +223,12 @@ void build_voxel_mesh_as_greedy_cubes(
 	const unsigned int deck_size = block_size.x * row_size;
 
 	// Note: voxel buffers are indexed in ZXY order
-	FixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
+	VoxelFixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
 	neighbor_offset_d_lut[Vector3i::AXIS_X] = block_size.y;
 	neighbor_offset_d_lut[Vector3i::AXIS_Y] = 1;
 	neighbor_offset_d_lut[Vector3i::AXIS_Z] = block_size.x * block_size.y;
 
-	FixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
+	VoxelFixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
 
 	// For each axis
 	for (unsigned int za = 0; za < Vector3i::AXIS_COUNT; ++za) {
@@ -247,7 +247,7 @@ void build_voxel_mesh_as_greedy_cubes(
 			// For each cell of the deck, gather face info
 			for (unsigned int fy = min_pos[ya]; fy < (unsigned int)max_pos[ya]; ++fy) {
 				for (unsigned int fx = min_pos[xa]; fx < (unsigned int)max_pos[xa]; ++fx) {
-					FixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
+					VoxelFixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
 					pos[xa] = fx;
 					pos[ya] = fy;
 					pos[za] = d;
@@ -387,7 +387,7 @@ void build_voxel_mesh_as_greedy_cubes(
 
 template <typename Voxel_T, typename Color_F>
 void build_voxel_mesh_as_greedy_cubes_atlased(
-		FixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
+		VoxelFixedArray<VoxelMesherCubes::Arrays, VoxelMesherCubes::MATERIAL_COUNT> &out_arrays_per_material,
 		VoxelMesherCubes::GreedyAtlasData &out_greedy_atlas_data,
 		const Span<Voxel_T> voxel_buffer,
 		const Vector3i block_size,
@@ -420,12 +420,12 @@ void build_voxel_mesh_as_greedy_cubes_atlased(
 	const unsigned int deck_size = block_size.x * row_size;
 
 	// Note: voxel buffers are indexed in ZXY order
-	FixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
+	VoxelFixedArray<uint32_t, Vector3i::AXIS_COUNT> neighbor_offset_d_lut;
 	neighbor_offset_d_lut[Vector3i::AXIS_X] = block_size.y;
 	neighbor_offset_d_lut[Vector3i::AXIS_Y] = 1;
 	neighbor_offset_d_lut[Vector3i::AXIS_Z] = block_size.x * block_size.y;
 
-	FixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
+	VoxelFixedArray<uint32_t, VoxelMesherCubes::MATERIAL_COUNT> index_offsets(0);
 
 	// For each axis
 	for (unsigned int za = 0; za < Vector3i::AXIS_COUNT; ++za) {
@@ -447,7 +447,7 @@ void build_voxel_mesh_as_greedy_cubes_atlased(
 			// For each cell of the deck, gather face info
 			for (unsigned int fy = min_pos[ya]; fy < (unsigned int)max_pos[ya]; ++fy) {
 				for (unsigned int fx = min_pos[xa]; fx < (unsigned int)max_pos[xa]; ++fx) {
-					FixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
+					VoxelFixedArray<unsigned int, Vector3i::AXIS_COUNT> pos;
 					pos[xa] = fx;
 					pos[ya] = fy;
 					pos[za] = d;

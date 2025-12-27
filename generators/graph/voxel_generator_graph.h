@@ -186,7 +186,7 @@ private:
 
 	static void gather_indices_and_weights(Span<const WeightOutput> weight_outputs,
 			const VoxelGraphRuntime::State &state, Vector3i rmin, Vector3i rmax, int ry,
-			VoxelBufferInternal &out_voxel_buffer, FixedArray<uint8_t, 4> spare_indices);
+			VoxelBufferInternal &out_voxel_buffer, VoxelFixedArray<uint8_t, 4> spare_indices);
 
 	static void _bind_methods();
 
@@ -218,12 +218,12 @@ private:
 		VoxelGraphRuntime runtime;
 		// Indices that are not used in the graph.
 		// This is used when there are less than 4 texture weight outputs.
-		FixedArray<uint8_t, 4> spare_texture_indices;
+		VoxelFixedArray<uint8_t, 4> spare_texture_indices;
 		// Index to the SDF output
 		int sdf_output_buffer_index = -1;
-		FixedArray<WeightOutput, 16> weight_outputs;
+		VoxelFixedArray<WeightOutput, 16> weight_outputs;
 		// List of indices to feed queries. The order doesn't matter, can be different from `weight_outputs`.
-		FixedArray<unsigned int, 16> weight_output_indices;
+		VoxelFixedArray<unsigned int, 16> weight_output_indices;
 		unsigned int weight_outputs_count = 0;
 	};
 

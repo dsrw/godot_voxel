@@ -218,7 +218,7 @@ void VoxelDataMap::copy(Vector3i min_pos, VoxelBufferInternal &dst_buffer, unsig
 	const Vector3i block_size_v(_block_size, _block_size, _block_size);
 
 	unsigned int channels_count;
-	FixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels =
+	VoxelFixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels =
 			VoxelBufferInternal::mask_to_channels_list(channels_mask, channels_count);
 
 	Vector3i bpos;

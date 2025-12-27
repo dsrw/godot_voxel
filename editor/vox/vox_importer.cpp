@@ -263,7 +263,7 @@ Error VoxelVoxImporter::import(const String &p_source_file, const String &p_save
 	mesher->set_greedy_meshing_enabled(true);
 	mesher->set_store_colors_in_texture(p_store_colors_in_textures);
 
-	FixedArray<Ref<SpatialMaterial>, 2> materials;
+	VoxelFixedArray<Ref<SpatialMaterial>, 2> materials;
 	for (unsigned int i = 0; i < materials.size(); ++i) {
 		Ref<SpatialMaterial> &mat = materials[i];
 		mat.instance();

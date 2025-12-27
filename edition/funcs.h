@@ -4,7 +4,7 @@
 #include "../storage/funcs.h"
 #include "../util/fixed_array.h"
 
-inline void _normalize_weights_preserving(FixedArray<float, 4> &weights, unsigned int preserved_index,
+inline void _normalize_weights_preserving(VoxelFixedArray<float, 4> &weights, unsigned int preserved_index,
 		unsigned int other0, unsigned int other1, unsigned int other2) {
 	const float part_sum = weights[other0] + weights[other1] + weights[other2];
 	// It is assumed the preserved channel is already clamped to [0, 1]
@@ -23,7 +23,7 @@ inline void _normalize_weights_preserving(FixedArray<float, 4> &weights, unsigne
 	}
 }
 
-inline void normalize_weights_preserving(FixedArray<float, 4> &weights, unsigned int preserved_index) {
+inline void normalize_weights_preserving(VoxelFixedArray<float, 4> &weights, unsigned int preserved_index) {
 	switch (preserved_index) {
 		case 0:
 			_normalize_weights_preserving(weights, 0, 1, 2, 3);
@@ -40,7 +40,7 @@ inline void normalize_weights_preserving(FixedArray<float, 4> &weights, unsigned
 	}
 }
 
-/*inline void normalize_weights(FixedArray<float, 4> &weights) {
+/*inline void normalize_weights(VoxelFixedArray<float, 4> &weights) {
 	float sum = 0;
 	for (unsigned int i = 0; i < weights.size(); ++i) {
 		sum += weights[i];
@@ -57,8 +57,8 @@ inline void blend_texture_packed_u16(int texture_index, float target_weight,
 	ERR_FAIL_COND(target_weight < 0.f || target_weight > 1.f);
 #endif
 
-	FixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(encoded_indices);
-	FixedArray<uint8_t, 4> weights = decode_weights_from_packed_u16(encoded_weights);
+	VoxelFixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(encoded_indices);
+	VoxelFixedArray<uint8_t, 4> weights = decode_weights_from_packed_u16(encoded_weights);
 
 	// Search if our texture index is already present
 	unsigned int component_index = 4;
@@ -87,7 +87,7 @@ inline void blend_texture_packed_u16(int texture_index, float target_weight,
 
 	// TODO Optimization in case target_weight is 1?
 
-	FixedArray<float, 4> weights_f;
+	VoxelFixedArray<float, 4> weights_f;
 	for (unsigned int i = 0; i < weights.size(); ++i) {
 		weights_f[i] = weights[i] / 255.f;
 	}

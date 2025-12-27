@@ -276,14 +276,14 @@ bool VoxelGeneratorGraph::is_using_xz_caching() const {
 // The problem is that it's harder to manage at the moment, to support edited blocks and LOD...
 void VoxelGeneratorGraph::gather_indices_and_weights(Span<const WeightOutput> weight_outputs,
 		const VoxelGraphRuntime::State &state, Vector3i rmin, Vector3i rmax, int ry,
-		VoxelBufferInternal &out_voxel_buffer, FixedArray<uint8_t, 4> spare_indices) {
+		VoxelBufferInternal &out_voxel_buffer, VoxelFixedArray<uint8_t, 4> spare_indices) {
 	VOXEL_PROFILE_SCOPE();
 
 	// TODO Optimization: exclude up-front outputs that are known to be zero?
 	// So we choose the cases below based on non-zero outputs instead of total output count
 
 	// TODO Could maybe put this part outside?
-	FixedArray<Span<const float>, 16> buffers;
+	VoxelFixedArray<Span<const float>, 16> buffers;
 	const unsigned int buffers_count = weight_outputs.size();
 	for (unsigned int oi = 0; oi < buffers_count; ++oi) {
 		const WeightOutput &info = weight_outputs[oi];
@@ -296,8 +296,8 @@ void VoxelGeneratorGraph::gather_indices_and_weights(Span<const WeightOutput> we
 		unsigned int value_index = 0;
 		for (int rz = rmin.z; rz < rmax.z; ++rz) {
 			for (int rx = rmin.x; rx < rmax.x; ++rx) {
-				FixedArray<uint8_t, 4> weights;
-				FixedArray<uint8_t, 4> indices = spare_indices;
+				VoxelFixedArray<uint8_t, 4> weights;
+				VoxelFixedArray<uint8_t, 4> indices = spare_indices;
 				weights.fill(0);
 				for (unsigned int oi = 0; oi < buffers_count; ++oi) {
 					const float weight = buffers[oi][value_index];
@@ -323,8 +323,8 @@ void VoxelGeneratorGraph::gather_indices_and_weights(Span<const WeightOutput> we
 		unsigned int value_index = 0;
 		for (int rz = rmin.z; rz < rmax.z; ++rz) {
 			for (int rx = rmin.x; rx < rmax.x; ++rx) {
-				FixedArray<uint8_t, 4> weights;
-				FixedArray<uint8_t, 4> indices;
+				VoxelFixedArray<uint8_t, 4> weights;
+				VoxelFixedArray<uint8_t, 4> indices;
 				for (unsigned int oi = 0; oi < buffers_count; ++oi) {
 					const float weight = buffers[oi][value_index];
 					weights[oi] = clamp(weight * 255.f, 0.f, 255.f);
@@ -345,11 +345,11 @@ void VoxelGeneratorGraph::gather_indices_and_weights(Span<const WeightOutput> we
 		// More weights than we can have per voxel. Will need to pick most represented weights
 		const float pivot = 1.f / 5.f;
 		unsigned int value_index = 0;
-		FixedArray<uint8_t, 16> skipped_outputs;
+		VoxelFixedArray<uint8_t, 16> skipped_outputs;
 		for (int rz = rmin.z; rz < rmax.z; ++rz) {
 			for (int rx = rmin.x; rx < rmax.x; ++rx) {
-				FixedArray<uint8_t, 4> weights;
-				FixedArray<uint8_t, 4> indices;
+				VoxelFixedArray<uint8_t, 4> weights;
+				VoxelFixedArray<uint8_t, 4> indices;
 				unsigned int skipped_outputs_count = 0;
 				indices.fill(0);
 				weights[0] = 1.f;
@@ -447,7 +447,7 @@ VoxelGenerator::Result VoxelGeneratorGraph::generate_block(VoxelBlockRequest &in
 	const float air_sdf = _debug_clipped_blocks ? -1.f : 1.f;
 	const float matter_sdf = _debug_clipped_blocks ? 1.f : -1.f;
 
-	FixedArray<uint8_t, 4> spare_texture_indices = runtime_ptr->spare_texture_indices;
+	VoxelFixedArray<uint8_t, 4> spare_texture_indices = runtime_ptr->spare_texture_indices;
 	const unsigned int sdf_output_buffer_index = runtime_ptr->sdf_output_buffer_index;
 
 	bool all_sdf_is_uniform = true;
@@ -699,8 +699,8 @@ VoxelGraphRuntime::CompilationResult VoxelGeneratorGraph::compile() {
 
 	// Calculate spare indices
 	{
-		FixedArray<bool, 16> used_indices_map;
-		FixedArray<uint8_t, 4> spare_indices;
+		VoxelFixedArray<bool, 16> used_indices_map;
+		VoxelFixedArray<uint8_t, 4> spare_indices;
 		used_indices_map.fill(false);
 		for (unsigned int i = 0; i < r->weight_outputs.size(); ++i) {
 			used_indices_map[r->weight_outputs[i].layer_index] = true;

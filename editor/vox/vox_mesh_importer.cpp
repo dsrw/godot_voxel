@@ -310,7 +310,7 @@ Error VoxelVoxMeshImporter::import(const String &p_source_file, const String &p_
 	// 	atlas->save_png(String("debug_atlas{0}.png").format(varray(model_index)));
 	// }
 
-	FixedArray<Ref<SpatialMaterial>, 2> materials;
+	VoxelFixedArray<Ref<SpatialMaterial>, 2> materials;
 	for (unsigned int i = 0; i < materials.size(); ++i) {
 		Ref<SpatialMaterial> &mat = materials[i];
 		mat.instance();

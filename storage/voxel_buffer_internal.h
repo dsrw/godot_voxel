@@ -111,7 +111,7 @@ public:
 
 	_FORCE_INLINE_ const Vector3i &get_size() const { return _size; }
 
-	void set_default_values(FixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> values);
+	void set_default_values(VoxelFixedArray<uint64_t, VoxelBufferInternal::MAX_CHANNELS> values);
 
 	uint64_t get_voxel(int x, int y, int z, unsigned int channel_index = 0) const;
 	void set_voxel(uint64_t value, int x, int y, int z, unsigned int channel_index = 0);
@@ -350,9 +350,9 @@ public:
 		}
 	}*/
 
-	static inline FixedArray<uint8_t, MAX_CHANNELS> mask_to_channels_list(
+	static inline VoxelFixedArray<uint8_t, MAX_CHANNELS> mask_to_channels_list(
 			uint8_t channels_mask, unsigned int &out_count) {
-		FixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels;
+		VoxelFixedArray<uint8_t, VoxelBufferInternal::MAX_CHANNELS> channels;
 		unsigned int channel_count = 0;
 
 		for (unsigned int channel_index = 0; channel_index < VoxelBufferInternal::MAX_CHANNELS; ++channel_index) {
@@ -450,7 +450,7 @@ private:
 private:
 	// Each channel can store arbitary data.
 	// For example, you can decide to store colors (R, G, B, A), gameplay types (type, state, light) or both.
-	FixedArray<Channel, MAX_CHANNELS> _channels;
+	VoxelFixedArray<Channel, MAX_CHANNELS> _channels;
 
 	// How many voxels are there in the three directions. All populated channels have the same size.
 	Vector3i _size;
@@ -469,7 +469,7 @@ inline void debug_check_texture_indices_packed_u16(const VoxelBufferInternal &vo
 		for (int x = 0; x < voxels.get_size().x; ++x) {
 			for (int y = 0; y < voxels.get_size().y; ++y) {
 				uint16_t pi = voxels.get_voxel(x, y, z, VoxelBufferInternal::CHANNEL_INDICES);
-				FixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(pi);
+				VoxelFixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(pi);
 				debug_check_texture_indices(indices);
 			}
 		}

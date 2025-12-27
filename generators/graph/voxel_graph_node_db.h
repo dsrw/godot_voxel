@@ -82,7 +82,7 @@ public:
 	bool try_get_input_index_from_name(uint32_t type_id, const String &name, uint32_t &out_input_index) const;
 
 private:
-	FixedArray<NodeType, VoxelGeneratorGraph::NODE_TYPE_COUNT> _types;
+	VoxelFixedArray<NodeType, VoxelGeneratorGraph::NODE_TYPE_COUNT> _types;
 	HashMap<String, VoxelGeneratorGraph::NodeTypeID> _type_name_to_id;
 };
 

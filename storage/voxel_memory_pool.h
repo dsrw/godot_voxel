@@ -89,7 +89,7 @@ private:
 	// This is chosen based on practical needs.
 	// Each slot in this array corresponds to allocations
 	// that contain 2^index bytes in them.
-	FixedArray<Pool, 21> _pot_pools;
+	VoxelFixedArray<Pool, 21> _pot_pools;
 #ifdef DEBUG_ENABLED
 	DebugUsedBlocks _debug_nonpooled_used_blocks;
 #endif

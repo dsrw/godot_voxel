@@ -141,12 +141,12 @@ inline Vector3 get_corner_gradient(
 	return Vector3(nx - px, ny - py, nz - pz);
 }
 
-inline uint32_t pack_bytes(const FixedArray<uint8_t, 4> &a) {
+inline uint32_t pack_bytes(const VoxelFixedArray<uint8_t, 4> &a) {
 	return (a[0] | (a[1] << 8) | (a[2] << 16) | (a[3] << 24));
 }
 
 void add_texture_data(std::vector<Vector2> &uv, unsigned int packed_indices,
-		FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights) {
+		VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights) {
 	struct IntUV {
 		uint32_t x;
 		uint32_t y;
@@ -162,12 +162,12 @@ void add_texture_data(std::vector<Vector2> &uv, unsigned int packed_indices,
 template <unsigned int NVoxels>
 struct CellTextureDatas {
 	uint32_t packed_indices = 0;
-	FixedArray<uint8_t, MAX_TEXTURE_BLENDS> indices;
-	FixedArray<FixedArray<uint8_t, MAX_TEXTURE_BLENDS>, NVoxels> weights;
+	VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> indices;
+	VoxelFixedArray<VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS>, NVoxels> weights;
 };
 
 template <unsigned int NVoxels, typename WeightSampler_T>
-CellTextureDatas<NVoxels> select_textures(const FixedArray<unsigned int, NVoxels> &voxel_indices,
+CellTextureDatas<NVoxels> select_textures(const VoxelFixedArray<unsigned int, NVoxels> &voxel_indices,
 		Span<const uint16_t> indices_data, const WeightSampler_T &weights_sampler) {
 	// TODO Optimization: this function takes almost half of the time when polygonizing non-empty cells.
 	// I wonder how it can be optimized further?
@@ -177,8 +177,8 @@ CellTextureDatas<NVoxels> select_textures(const FixedArray<unsigned int, NVoxels
 		unsigned int weight;
 	};
 
-	FixedArray<FixedArray<uint8_t, MAX_TEXTURES>, NVoxels> cell_texture_weights_temp;
-	FixedArray<IndexAndWeight, MAX_TEXTURES> indexed_weight_sums;
+	VoxelFixedArray<VoxelFixedArray<uint8_t, MAX_TEXTURES>, NVoxels> cell_texture_weights_temp;
+	VoxelFixedArray<IndexAndWeight, MAX_TEXTURES> indexed_weight_sums;
 
 	// Find 4 most-used indices in voxels
 	for (unsigned int i = 0; i < indexed_weight_sums.size(); ++i) {
@@ -188,10 +188,10 @@ CellTextureDatas<NVoxels> select_textures(const FixedArray<unsigned int, NVoxels
 		//VOXEL_PROFILE_SCOPE();
 
 		const unsigned int data_index = voxel_indices[ci];
-		const FixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(indices_data[data_index]);
-		const FixedArray<uint8_t, 4> weights = weights_sampler.get_weights(data_index);
+		const VoxelFixedArray<uint8_t, 4> indices = decode_indices_from_packed_u16(indices_data[data_index]);
+		const VoxelFixedArray<uint8_t, 4> weights = weights_sampler.get_weights(data_index);
 
-		FixedArray<uint8_t, MAX_TEXTURES> &weights_temp = cell_texture_weights_temp[ci];
+		VoxelFixedArray<uint8_t, MAX_TEXTURES> &weights_temp = cell_texture_weights_temp[ci];
 		weights_temp.fill(0);
 
 		for (unsigned int j = 0; j < indices.size(); ++j) {
@@ -229,8 +229,8 @@ CellTextureDatas<NVoxels> select_textures(const FixedArray<unsigned int, NVoxels
 	// Remap weights to follow the indices we selected
 	for (unsigned int ci = 0; ci < cell_texture_weights_temp.size(); ++ci) {
 		//VOXEL_PROFILE_SCOPE();
-		const FixedArray<uint8_t, MAX_TEXTURES> &src_weights = cell_texture_weights_temp[ci];
-		FixedArray<uint8_t, 4> &dst_weights = cell_textures.weights[ci];
+		const VoxelFixedArray<uint8_t, MAX_TEXTURES> &src_weights = cell_texture_weights_temp[ci];
+		VoxelFixedArray<uint8_t, 4> &dst_weights = cell_textures.weights[ci];
 
 		for (unsigned int i = 0; i < cell_textures.indices.size(); ++i) {
 			const unsigned int ti = cell_textures.indices[i];
@@ -243,14 +243,14 @@ CellTextureDatas<NVoxels> select_textures(const FixedArray<unsigned int, NVoxels
 
 struct TextureIndicesData {
 	Span<const uint16_t> buffer;
-	FixedArray<uint8_t, 4> default_indices;
+	VoxelFixedArray<uint8_t, 4> default_indices;
 	uint32_t packed_default_indices;
 };
 
 template <unsigned int NVoxels, typename WeightSampler_T>
 inline void get_cell_texture_data(CellTextureDatas<NVoxels> &cell_textures,
 		const TextureIndicesData &texture_indices_data,
-		const FixedArray<unsigned int, NVoxels> &voxel_indices,
+		const VoxelFixedArray<unsigned int, NVoxels> &voxel_indices,
 		const WeightSampler_T &weights_data) {
 	if (texture_indices_data.buffer.size() == 0) {
 		// Indices are known for the whole block, just read weights directly
@@ -356,7 +356,7 @@ void build_regular_mesh(
 				// |/      |/    |/
 				// 0-------1     o--x
 
-				FixedArray<unsigned int, 8> corner_data_indices;
+				VoxelFixedArray<unsigned int, 8> corner_data_indices;
 				corner_data_indices[0] = data_index;
 				corner_data_indices[1] = data_index + n100;
 				corner_data_indices[2] = data_index + n010;
@@ -366,7 +366,7 @@ void build_regular_mesh(
 				corner_data_indices[6] = data_index + n011;
 				corner_data_indices[7] = data_index + n111;
 
-				FixedArray<float, 8> cell_samples_sdf;
+				VoxelFixedArray<float, 8> cell_samples_sdf;
 				for (unsigned int i = 0; i < corner_data_indices.size(); ++i) {
 					cell_samples_sdf[i] = sdf_as_float(sdf_data[corner_data_indices[i]]);
 					// TODO Need to investigate if there is a better way to eliminate degenerate triangles.
@@ -407,7 +407,7 @@ void build_regular_mesh(
 
 				CRASH_COND(case_code > 255);
 
-				FixedArray<Vector3i, 8> padded_corner_positions;
+				VoxelFixedArray<Vector3i, 8> padded_corner_positions;
 				padded_corner_positions[0] = Vector3i(pos.x, pos.y, pos.z);
 				padded_corner_positions[1] = Vector3i(pos.x + 1, pos.y, pos.z);
 				padded_corner_positions[2] = Vector3i(pos.x, pos.y + 1, pos.z);
@@ -423,7 +423,7 @@ void build_regular_mesh(
 					current_reuse_cell.packed_texture_indices = cell_textures.packed_indices;
 				}
 
-				FixedArray<Vector3i, 8> corner_positions;
+				VoxelFixedArray<Vector3i, 8> corner_positions;
 				for (unsigned int i = 0; i < padded_corner_positions.size(); ++i) {
 					const Vector3i p = padded_corner_positions[i];
 					// Undo padding here. From this point, corner positions are actual positions.
@@ -446,7 +446,7 @@ void build_regular_mesh(
 				const uint8_t triangle_count = regular_cell_data.geometryCounts & 0x0f;
 				const uint8_t vertex_count = (regular_cell_data.geometryCounts & 0xf0) >> 4;
 
-				FixedArray<int, 12> cell_vertex_indices(-1);
+				VoxelFixedArray<int, 12> cell_vertex_indices(-1);
 
 				const uint8_t cell_border_mask = get_border_mask(pos - min_pos, block_size - Vector3i(1));
 
@@ -554,9 +554,9 @@ void build_regular_mesh(
 									output.add_vertex(primaryf, normal, border_mask, secondary);
 
 							if (texturing_mode == TEXTURES_BLEND_4_OVER_16) {
-								const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights0 = cell_textures.weights[v0];
-								const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[v1];
-								FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights;
+								const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights0 = cell_textures.weights[v0];
+								const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[v1];
+								VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights;
 								for (unsigned int i = 0; i < MAX_TEXTURE_BLENDS; ++i) {
 									weights[i] = static_cast<uint8_t>(
 											clamp(Math::lerp(weights0[i], weights1[i], t1), 0.f, 255.f));
@@ -593,7 +593,7 @@ void build_regular_mesh(
 								output.add_vertex(primaryf, normal, border_mask, secondary);
 
 						if (texturing_mode == TEXTURES_BLEND_4_OVER_16) {
-							const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[v1];
+							const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[v1];
 							add_texture_data(output.uv, cell_textures.packed_indices, weights1);
 						}
 
@@ -642,7 +642,7 @@ void build_regular_mesh(
 									output.add_vertex(primaryf, normal, border_mask, secondary);
 
 							if (texturing_mode == TEXTURES_BLEND_4_OVER_16) {
-								const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights = cell_textures.weights[vi];
+								const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights = cell_textures.weights[vi];
 								add_texture_data(output.uv, cell_textures.packed_indices, weights);
 							}
 						}
@@ -802,7 +802,7 @@ void build_transition_mesh(
 	const int fn20 = 2 * fn10;
 	const int fn02 = 2 * fn01;
 
-	FixedArray<Vector3i, 13> cell_positions;
+	VoxelFixedArray<Vector3i, 13> cell_positions;
 	const int fz = MIN_PADDING;
 
 	const Sdf_T isolevel = get_isolevel<Sdf_T>();
@@ -834,7 +834,7 @@ void build_transition_mesh(
 				}
 			}
 
-			FixedArray<unsigned int, 9> cell_data_indices;
+			VoxelFixedArray<unsigned int, 9> cell_data_indices;
 			cell_data_indices[0] = data_index;
 			cell_data_indices[1] = data_index + fn10;
 			cell_data_indices[2] = data_index + fn20;
@@ -852,7 +852,7 @@ void build_transition_mesh(
 			//  0---1---2
 
 			// Full-resolution samples 0..8
-			FixedArray<float, 13> cell_samples;
+			VoxelFixedArray<float, 13> cell_samples;
 			for (unsigned int i = 0; i < 9; ++i) {
 				cell_samples[i] = sdf_as_float(sdf_data[cell_data_indices[i]]);
 			}
@@ -908,7 +908,7 @@ void build_transition_mesh(
 			CRASH_COND(case_code > 511);
 
 			// TODO We may not need all of them!
-			FixedArray<Vector3, 13> cell_gradients;
+			VoxelFixedArray<Vector3, 13> cell_gradients;
 			for (unsigned int i = 0; i < 9; ++i) {
 				const unsigned int di = cell_data_indices[i];
 
@@ -951,7 +951,7 @@ void build_transition_mesh(
 			const bool flip_triangles = ((cell_class & 128) != 0);
 
 			const unsigned int vertex_count = cell_data.GetVertexCount();
-			FixedArray<int, 12> cell_vertex_indices(-1);
+			VoxelFixedArray<int, 12> cell_vertex_indices(-1);
 			CRASH_COND(vertex_count > cell_vertex_indices.size());
 
 			const uint8_t direction_validity_mask = (fx > min_fpos_x ? 1 : 0) | ((fy > min_fpos_y ? 1 : 0) << 1);
@@ -1045,9 +1045,9 @@ void build_transition_mesh(
 						cell_vertex_indices[vertex_index] = output.add_vertex(primaryf, normal, border_mask, secondary);
 
 						if (texturing_mode == TEXTURES_BLEND_4_OVER_16) {
-							const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights0 = cell_textures.weights[index_vertex_a];
-							const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[index_vertex_b];
-							FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights;
+							const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights0 = cell_textures.weights[index_vertex_a];
+							const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights1 = cell_textures.weights[index_vertex_b];
+							VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights;
 							for (unsigned int i = 0; i < cell_textures.indices.size(); ++i) {
 								weights[i] = static_cast<uint8_t>(
 										clamp(Math::lerp(weights0[i], weights1[i], t1), 0.f, 255.f));
@@ -1106,7 +1106,7 @@ void build_transition_mesh(
 						cell_vertex_indices[vertex_index] = output.add_vertex(primaryf, normal, border_mask, secondary);
 
 						if (texturing_mode == TEXTURES_BLEND_4_OVER_16) {
-							const FixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights = cell_textures.weights[cell_index];
+							const VoxelFixedArray<uint8_t, MAX_TEXTURE_BLENDS> weights = cell_textures.weights[cell_index];
 							add_texture_data(output.uv, cell_textures.packed_indices, weights);
 						}
 
@@ -1194,8 +1194,8 @@ struct WeightSampler3U8 {
 	Span<const uint8_t> u8_data0;
 	Span<const uint8_t> u8_data1;
 	Span<const uint8_t> u8_data2;
-	inline FixedArray<uint8_t, 4> get_weights(int i) const {
-		FixedArray<uint8_t, 4> w;
+	inline VoxelFixedArray<uint8_t, 4> get_weights(int i) const {
+		VoxelFixedArray<uint8_t, 4> w;
 		w[0] = u8_data0[i];
 		w[1] = u8_data1[i];
 		w[2] = u8_data2[i];
@@ -1211,7 +1211,7 @@ thread_local std::vector<uint8_t> s_weights_backing_buffer_u8_2;
 #else
 struct WeightSamplerPackedU16 {
 	Span<const uint16_t> u16_data;
-	inline FixedArray<uint8_t, 4> get_weights(int i) const {
+	inline VoxelFixedArray<uint8_t, 4> get_weights(int i) const {
 		return decode_weights_from_packed_u16(u16_data[i]);
 	}
 };

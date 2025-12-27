@@ -1231,7 +1231,7 @@ bool VoxelLodTerrain::check_block_mesh_updated(VoxelMeshBlock *block, std::vecto
 			const Vector3i data_block_pos0 = factor * block->position;
 			const Box3i data_box(data_block_pos0 - Vector3i(1), Vector3i(factor) + Vector3i(2));
 			const Box3i bounds = _bounds_in_voxels.downscaled(data_block_size);
-			FixedArray<Vector3i, 56> neighbor_positions;
+			VoxelFixedArray<Vector3i, 56> neighbor_positions;
 			unsigned int neighbor_positions_count = 0;
 			data_box.for_inner_outline([bounds, &neighbor_positions, &neighbor_positions_count](Vector3i pos) {
 				if (bounds.contains(pos)) {

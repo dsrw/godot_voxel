@@ -54,12 +54,12 @@ struct MeshArrays {
 };
 
 struct ReuseCell {
-	FixedArray<int, 4> vertices;
+	VoxelFixedArray<int, 4> vertices;
 	unsigned int packed_texture_indices = 0;
 };
 
 struct ReuseTransitionCell {
-	FixedArray<int, 12> vertices;
+	VoxelFixedArray<int, 12> vertices;
 	unsigned int packed_texture_indices = 0;
 };
 
@@ -102,14 +102,14 @@ public:
 	}
 
 private:
-	FixedArray<std::vector<ReuseCell>, 2> _cache;
-	FixedArray<std::vector<ReuseTransitionCell>, 2> _cache_2d;
+	VoxelFixedArray<std::vector<ReuseCell>, 2> _cache;
+	VoxelFixedArray<std::vector<ReuseTransitionCell>, 2> _cache_2d;
 	Vector3i _block_size;
 };
 
 // This is only to re-use some data computed for regular mesh into transition meshes
 struct DefaultTextureIndicesData {
-	FixedArray<uint8_t, 4> indices;
+	VoxelFixedArray<uint8_t, 4> indices;
 	uint32_t packed_indices;
 	bool use;
 };

@@ -43,7 +43,7 @@ public:
 
 	// TODO Remove this one, prefer to_span() specializations
 	template <unsigned int N>
-	inline Span(FixedArray<T, N> &a) {
+	inline Span(VoxelFixedArray<T, N> &a) {
 		_ptr = a.data();
 		_size = a.size();
 	}
@@ -129,24 +129,24 @@ Span<const T> to_span_const(const std::vector<T> &vec) {
 }
 
 template <typename T, unsigned int N>
-Span<T> to_span(FixedArray<T, N> &a) {
+Span<T> to_span(VoxelFixedArray<T, N> &a) {
 	return Span<T>(a.data(), a.size());
 }
 
 template <typename T, unsigned int N>
-Span<T> to_span(FixedArray<T, N> &a, unsigned int count) {
+Span<T> to_span(VoxelFixedArray<T, N> &a, unsigned int count) {
 	CRASH_COND(count > a.size());
 	return Span<T>(a.data(), count);
 }
 
 template <typename T, unsigned int N>
-Span<const T> to_span_const(const FixedArray<T, N> &a, unsigned int count) {
+Span<const T> to_span_const(const VoxelFixedArray<T, N> &a, unsigned int count) {
 	CRASH_COND(count > a.size());
 	return Span<const T>(a.data(), count);
 }
 
 template <typename T, unsigned int N>
-Span<const T> to_span_const(const FixedArray<T, N> &a) {
+Span<const T> to_span_const(const VoxelFixedArray<T, N> &a) {
 	return Span<const T>(a.data(), 0, a.size());
 }
 

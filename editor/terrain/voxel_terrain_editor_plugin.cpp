@@ -153,7 +153,7 @@ private:
 		Label *label = nullptr;
 	};
 
-	FixedArray<Stat, STAT_COUNT> _stats;
+	VoxelFixedArray<Stat, STAT_COUNT> _stats;
 };
 
 VoxelTerrainEditorPlugin::VoxelTerrainEditorPlugin(EditorNode *p_node) {

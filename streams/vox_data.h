@@ -125,7 +125,7 @@ public:
 	const int get_material_id_for_palette_index(unsigned int palette_index) const;
 	const Material &get_material_by_id(int id) const;
 
-	inline const FixedArray<Color8, 256> &get_palette() const {
+	inline const VoxelFixedArray<Color8, 256> &get_palette() const {
 		return _palette;
 	}
 
@@ -138,7 +138,7 @@ private:
 	// Material IDs are supposedly tied to palette indices
 	std::unordered_map<int, std::unique_ptr<Material>> _materials;
 	int _root_node_id = -1;
-	FixedArray<Color8, 256> _palette;
+	VoxelFixedArray<Color8, 256> _palette;
 };
 
 } // namespace vox
