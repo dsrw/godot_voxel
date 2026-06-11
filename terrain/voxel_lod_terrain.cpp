@@ -58,7 +58,10 @@ Ref<ArrayMesh> build_mesh(const Vector<Array> surfaces, Mesh::PrimitiveType prim
 		}
 	}*/
 
-	if (is_mesh_empty(mesh)) {
+	// Not is_mesh_empty(): that queries surface_get_array_len through the
+	// threaded VisualServer — a blocking render-thread round-trip per block.
+	// Surfaces added above are non-empty by construction.
+	if (surface_index == 0) {
 		mesh = Ref<Mesh>();
 	}
 

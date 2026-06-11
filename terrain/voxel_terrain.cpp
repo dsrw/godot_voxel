@@ -1222,8 +1222,18 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		return;
 	}
 
-	Ref<ArrayMesh> mesh;
-	mesh.instance();
+	// Reuse the block's existing ArrayMesh when possible: constructing one
+	// allocates its RID through the threaded VisualServer, and the RID pool
+	// refill blocks behind the render thread's current frame — stalling mesh
+	// bursts for whole frames at a time.
+	Ref<ArrayMesh> mesh = block->get_mesh();
+	if (mesh.is_valid()) {
+		while (mesh->get_surface_count() > 0) {
+			mesh->surface_remove(0);
+		}
+	} else {
+		mesh.instance();
+	}
 
 	Vector<Array> collidable_surfaces; //need to put both blocky and smooth surfaces into one list
 
@@ -1247,7 +1257,11 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		++surface_index;
 	}
 
-	if (is_mesh_empty(mesh)) {
+	// Not is_mesh_empty(): that queries surface_get_array_len through the
+	// threaded VisualServer — a blocking render-thread round-trip per block,
+	// which dominated main-thread time during mesh bursts. Surfaces added
+	// above are non-empty by construction.
+	if (surface_index == 0) {
 		mesh = Ref<Mesh>();
 		collidable_surfaces.clear();
 	}
