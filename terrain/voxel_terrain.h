@@ -77,6 +77,13 @@ public:
 	void restart_stream() override;
 	void remesh_all_blocks() override;
 
+	// Count of blocks with unfinished work anywhere in the pipeline: data
+	// blocks waiting to be requested or loaded, mesh blocks scheduled but not
+	// sent, and mesh requests in flight (sent to VoxelServer but not yet
+	// applied, including results queued in time-spread apply tasks). Zero
+	// means every submitted edit is meshed and visible.
+	int get_pending_block_updates() const;
+
 	// For convenience, this is actually stored in a particular type of mesher
 	Ref<VoxelLibrary> get_voxel_library() const;
 
@@ -193,6 +200,12 @@ private:
 	std::vector<Vector3i> _blocks_pending_load;
 	std::vector<Vector3i> _blocks_pending_update;
 	std::vector<BlockToSave> _blocks_to_save;
+
+	// Mesh requests sent to VoxelServer whose results haven't been applied
+	// yet. Incremented when a request is sent, decremented when
+	// apply_mesh_update runs for the result (applied, dropped, or stale).
+	// Only touched on the main thread (send loop and time-spread tasks).
+	int _meshes_in_flight = 0;
 
 	Ref<VoxelStream> _stream;
 	Ref<VoxelMesher> _mesher;

@@ -578,6 +578,11 @@ Dictionary VoxelTerrain::_b_get_statistics() const {
 	return d;
 }
 
+int VoxelTerrain::get_pending_block_updates() const {
+	return int(_loading_blocks.size()) + int(_blocks_pending_load.size()) +
+		   int(_blocks_pending_update.size()) + _meshes_in_flight;
+}
+
 void VoxelTerrain::start_updater() {
 	Ref<VoxelMesherBlocky> blocky_mesher = _mesher;
 	if (blocky_mesher.is_valid()) {
@@ -1192,6 +1197,7 @@ void VoxelTerrain::process_meshing() {
 			VoxelServer::get_singleton()->request_block_mesh(_volume_id, mesh_request);
 
 			mesh_block->set_mesh_state(VoxelMeshBlock::MESH_UPDATE_SENT);
+			++_meshes_in_flight;
 		}
 
 		_blocks_pending_update.clear();
@@ -1205,6 +1211,12 @@ void VoxelTerrain::process_meshing() {
 void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	VOXEL_PROFILE_SCOPE();
 	//print_line(String("DDD receive {0}").format(varray(ob.position.to_vec3())));
+
+	// Every sent request produces exactly one output (applied, dropped, or
+	// stale), and they all land here.
+	if (_meshes_in_flight > 0) {
+		--_meshes_in_flight;
+	}
 
 	VoxelMeshBlock *block = _mesh_map.get_block(ob.position);
 	if (block == nullptr) {
@@ -1401,6 +1413,7 @@ void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_mesh_block_size", "size"), &VoxelTerrain::set_mesh_block_size);
 
 	ClassDB::bind_method(D_METHOD("get_statistics"), &VoxelTerrain::_b_get_statistics);
+	ClassDB::bind_method(D_METHOD("get_pending_block_updates"), &VoxelTerrain::get_pending_block_updates);
 	ClassDB::bind_method(D_METHOD("get_voxel_tool"), &VoxelTerrain::get_voxel_tool);
 
 	ClassDB::bind_method(D_METHOD("save_modified_blocks"), &VoxelTerrain::_b_save_modified_blocks);
