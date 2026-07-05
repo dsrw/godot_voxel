@@ -319,6 +319,14 @@ void VoxelDataMap::paste(Vector3i min_pos, VoxelBufferInternal &src_buffer, unsi
 									return src_v;
 								});
 
+					} else if (src_buffer.is_uniform(channel)) {
+						// A paste must overwrite. copy_from treats a uniform source whose
+						// value matches the destination's default as a no-op — the right
+						// call for block delivery, but it would make pasting zeros over
+						// existing voxels (erasing) do nothing.
+						const Vector3i dst_min = min_pos - dst_block_origin;
+						dst_buffer.fill_area(src_buffer.get_voxel(Vector3i(), channel),
+								dst_min, dst_min + src_buffer.get_size(), channel);
 					} else {
 						dst_buffer.copy_from(src_buffer,
 								Vector3i(),
