@@ -63,6 +63,12 @@ public:
 	void set_material(unsigned int id, Ref<Material> material);
 	Ref<Material> get_material(unsigned int id) const;
 
+	// Hides/shows every render mesh of this terrain without touching voxel
+	// data, collisions or child nodes. Used to display alternate geometry
+	// (e.g. animation frame meshes) in place of the live meshes.
+	void set_render_blocks_visible(bool visible);
+	bool are_render_blocks_visible() const { return _render_blocks_visible; }
+
 	VoxelDataMap &get_storage() { return _data_map; }
 	const VoxelDataMap &get_storage() const { return _data_map; }
 
@@ -212,6 +218,7 @@ private:
 	Ref<VoxelGenerator> _generator;
 
 	bool _generate_collisions = true;
+	bool _render_blocks_visible = true;
 	unsigned int _collision_layer = 1;
 	unsigned int _collision_mask = 1;
 	float _collision_margin = VoxelConstants::DEFAULT_COLLISION_MARGIN;

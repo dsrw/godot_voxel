@@ -1287,9 +1287,27 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		block->set_collision_layer(_collision_layer);
 		block->set_collision_mask(_collision_mask);
 	}
-	block->set_visible(true);
+	block->set_visible(_render_blocks_visible);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
+}
+
+void VoxelTerrain::set_render_blocks_visible(bool visible) {
+	if (visible == _render_blocks_visible) {
+		return;
+	}
+	_render_blocks_visible = visible;
+
+	struct SetVisibilityAction {
+		bool visible;
+		SetVisibilityAction(bool v) :
+				visible(v) {}
+		void operator()(VoxelMeshBlock *block) {
+			block->set_visible(visible);
+		}
+	};
+
+	_mesh_map.for_all_blocks(SetVisibilityAction(visible));
 }
 
 Ref<VoxelTool> VoxelTerrain::get_voxel_tool() {
@@ -1387,6 +1405,9 @@ AABB VoxelTerrain::_b_get_bounds() const {
 
 void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_material", "id", "material"), &VoxelTerrain::set_material);
+	ClassDB::bind_method(D_METHOD("set_render_blocks_visible", "visible"),
+			&VoxelTerrain::set_render_blocks_visible);
+	ClassDB::bind_method(D_METHOD("are_render_blocks_visible"), &VoxelTerrain::are_render_blocks_visible);
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);
 
 	ClassDB::bind_method(D_METHOD("set_max_view_distance", "distance_in_voxels"), &VoxelTerrain::set_max_view_distance);
