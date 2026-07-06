@@ -354,9 +354,16 @@ void VoxelTerrain::try_schedule_mesh_update(VoxelMeshBlock *mesh_block) {
 
 	const int render_to_data_factor = get_mesh_block_size() / get_data_block_size();
 	const Box3i bounds_in_data_blocks = _bounds_in_voxels.downscaled(get_data_block_size());
-	// Pad by 1 because meshing needs neighbors
+	// Only the block's own data cells are required: the mesh task fills
+	// missing neighbor buffers from the generator (see
+	// copy_block_and_neighbors — only the central buffer must be valid).
+	// Requiring the padded neighborhood here silently refused updates for
+	// blocks at the data-streaming frontier, and refused edits were
+	// forgotten — the block kept its previous mesh (or none) forever, even
+	// with the new content in its data. Any seam meshed against a
+	// generator-filled neighbor self-corrects when that neighbor loads:
+	// the data-arrival path re-schedules affected mesh blocks.
 	const Box3i data_box = Box3i(mesh_block->position * render_to_data_factor, Vector3i(render_to_data_factor))
-								   .padded(1)
 								   .clipped(bounds_in_data_blocks);
 
 	// If we get an empty box at this point, something is wrong with the caller
@@ -883,7 +890,8 @@ void VoxelTerrain::process_viewers() {
 				PairedViewer::State &state = paired_viewer.state;
 
 				const unsigned int view_distance_voxels =
-						static_cast<unsigned int>(static_cast<float>(viewer.view_distance) * view_distance_scale);
+						static_cast<unsigned int>(static_cast<float>(viewer.view_distance) * view_distance_scale *
+								self._viewer_distance_scale);
 				const Vector3 local_position = world_to_local_transform.xform(viewer.world_position);
 
 				state.view_distance_voxels = min(view_distance_voxels, self._max_view_distance_voxels);
@@ -1228,9 +1236,14 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	}
 
 	if (ob.type == VoxelServer::BlockMeshOutput::TYPE_DROPPED) {
-		// That block is loaded, but its meshing request was dropped.
-		// TODO Not sure what to do in this case, the code sending update queries has to be tweaked
+		// The meshing request was cancelled (e.g. the meshing dependency was
+		// invalidated). Re-mark the block so it gets requested again —
+		// leaving it MESH_UPDATE_SENT strands it with its previous mesh
+		// forever.
 		PRINT_VERBOSE("Received a block mesh drop while we were still expecting it");
+		// (try_schedule sets MESH_UPDATE_NOT_SENT and queues it; presetting
+		// the state here would make it bail as "already queued")
+		try_schedule_mesh_update(block);
 		++_stats.dropped_block_meshs;
 		return;
 	}
@@ -1301,6 +1314,42 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	// border-remeshes.
 	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3(),
 			(int)ob.version);
+}
+
+Array VoxelTerrain::get_debug_paired_viewers() {
+	Array a;
+	for (size_t i = 0; i < _paired_viewers.size(); ++i) {
+		const PairedViewer &p = _paired_viewers[i];
+		Dictionary d;
+		d["view_distance_voxels"] = (int)p.state.view_distance_voxels;
+		d["requires_meshes"] = p.state.requires_meshes;
+		d["local_position"] = p.state.local_position_voxels.to_vec3();
+		d["mesh_box_min"] = p.state.mesh_box.pos.to_vec3();
+		d["mesh_box_size"] = p.state.mesh_box.size.to_vec3();
+		a.append(d);
+	}
+	Dictionary bounds;
+	bounds["bounds_min"] = _bounds_in_voxels.pos.to_vec3();
+	bounds["bounds_size"] = _bounds_in_voxels.size.to_vec3();
+	bounds["max_view_distance"] = (int)_max_view_distance_voxels;
+	a.append(bounds);
+	return a;
+}
+
+Dictionary VoxelTerrain::get_block_debug_info(Vector3 bpos) {
+	Dictionary d;
+	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
+	if (block == nullptr) {
+		d["exists"] = false;
+		return d;
+	}
+	d["exists"] = true;
+	d["mesh_state"] = (int)block->get_mesh_state();
+	d["mesh_viewers"] = (int)block->mesh_viewers.get();
+	d["collision_viewers"] = (int)block->collision_viewers.get();
+	d["has_mesh"] = block->get_mesh().is_valid();
+	d["visible"] = block->is_visible();
+	return d;
 }
 
 int VoxelTerrain::get_block_mesh_request_version(Vector3 bpos) {
@@ -1446,6 +1495,12 @@ void VoxelTerrain::_bind_methods() {
 			&VoxelTerrain::get_block_mesh);
 	ClassDB::bind_method(D_METHOD("get_block_mesh_request_version", "block_position"),
 			&VoxelTerrain::get_block_mesh_request_version);
+	ClassDB::bind_method(D_METHOD("get_block_debug_info", "block_position"),
+			&VoxelTerrain::get_block_debug_info);
+	ClassDB::bind_method(D_METHOD("get_debug_paired_viewers"), &VoxelTerrain::get_debug_paired_viewers);
+	ClassDB::bind_method(D_METHOD("set_viewer_distance_scale", "scale"),
+			&VoxelTerrain::set_viewer_distance_scale);
+	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
 	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position"),
 			PropertyInfo(Variant::INT, "version")));
 	ClassDB::bind_method(D_METHOD("are_render_blocks_visible"), &VoxelTerrain::are_render_blocks_visible);

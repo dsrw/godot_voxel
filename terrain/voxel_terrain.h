@@ -56,6 +56,15 @@ public:
 	unsigned int get_max_view_distance() const;
 	void set_max_view_distance(unsigned int distance_in_voxels);
 
+	// Multiplier applied to every viewer's view distance when pairing with
+	// this terrain. Hosts that render voxels at a non-unit world size (e.g.
+	// scaled builds whose geometry is baked smaller) set this to
+	// 1/voxel_world_size so pairing covers the same WORLD distance the
+	// viewer asked for — otherwise meshes stop at view_distance × scale
+	// world units while remaining visually in range.
+	void set_viewer_distance_scale(float scale) { _viewer_distance_scale = scale; }
+	float get_viewer_distance_scale() const { return _viewer_distance_scale; }
+
 	// TODO Make this obsolete with multi-viewers
 	void set_viewer_path(NodePath path);
 	NodePath get_viewer_path() const;
@@ -77,6 +86,10 @@ public:
 	// Sample after an edit: any mesh_block_updated with a greater version
 	// was built from data that includes the edit.
 	int get_block_mesh_request_version(Vector3 bpos);
+
+	// Debug: mesh state / viewer refcounts / mesh presence for one block.
+	Dictionary get_block_debug_info(Vector3 bpos);
+	Array get_debug_paired_viewers();
 
 	VoxelDataMap &get_storage() { return _data_map; }
 	const VoxelDataMap &get_storage() const { return _data_map; }
@@ -228,6 +241,7 @@ private:
 
 	bool _generate_collisions = true;
 	bool _render_blocks_visible = true;
+	float _viewer_distance_scale = 1.f;
 	unsigned int _collision_layer = 1;
 	unsigned int _collision_mask = 1;
 	float _collision_margin = VoxelConstants::DEFAULT_COLLISION_MARGIN;

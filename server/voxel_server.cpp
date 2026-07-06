@@ -1,4 +1,6 @@
 #include "voxel_server.h"
+
+#include <limits>
 #include "../constants/voxel_constants.h"
 #include "../storage/voxel_memory_pool.h"
 #include "../util/funcs.h"
@@ -317,11 +319,14 @@ void VoxelServer::init_priority_dependency(
 
 	switch (volume.type) {
 		case VOLUME_SPARSE_GRID:
-			// Distance beyond which no field of view can overlap the block.
-			// Doubling block radius to account for an extra margin of blocks,
-			// since they are used to provide neighbors when meshing
-			dep.drop_distance_squared =
-					squared(_world.shared_priority_dependency->highest_view_distance + 2.f * transformed_block_radius);
+			// Never drop by distance: these are bounded volumes whose data is
+			// already loaded, so completing the mesh costs little — while a
+			// dropped mesh update leaves the block displaying its previous
+			// mesh forever (apply marks it in-flight and nothing re-queues
+			// it), which shows up as stale geometry stranded at the edge of
+			// view range after bulk edits. Distance still drives priority,
+			// just not cancellation.
+			dep.drop_distance_squared = std::numeric_limits<float>::max();
 			break;
 
 		case VOLUME_SPARSE_OCTREE:
