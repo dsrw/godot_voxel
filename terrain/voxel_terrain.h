@@ -69,6 +69,10 @@ public:
 	void set_render_blocks_visible(bool visible);
 	bool are_render_blocks_visible() const { return _render_blocks_visible; }
 
+	// Current render mesh of a loaded block (null if none). With take, the
+	// mesh is detached from the block so later mesh updates can't mutate it.
+	Ref<Mesh> get_block_mesh(Vector3 bpos, bool take);
+
 	VoxelDataMap &get_storage() { return _data_map; }
 	const VoxelDataMap &get_storage() const { return _data_map; }
 

@@ -1291,6 +1291,24 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	block->set_render_visible(_render_blocks_visible);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
+
+	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3());
+}
+
+Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
+	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
+	if (block == nullptr) {
+		return Ref<Mesh>();
+	}
+	Ref<Mesh> mesh = block->get_mesh();
+	if (take) {
+		// Detach the mesh from the block so future updates can't mutate it
+		// (mesh updates reuse the block's ArrayMesh in place). The block goes
+		// meshless until its next update — callers take while render blocks
+		// are hidden.
+		block->set_mesh(Ref<Mesh>());
+	}
+	return mesh;
 }
 
 void VoxelTerrain::set_render_blocks_visible(bool visible) {
@@ -1408,6 +1426,9 @@ void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_material", "id", "material"), &VoxelTerrain::set_material);
 	ClassDB::bind_method(D_METHOD("set_render_blocks_visible", "visible"),
 			&VoxelTerrain::set_render_blocks_visible);
+	ClassDB::bind_method(D_METHOD("get_block_mesh", "block_position", "take"),
+			&VoxelTerrain::get_block_mesh);
+	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position")));
 	ClassDB::bind_method(D_METHOD("are_render_blocks_visible"), &VoxelTerrain::are_render_blocks_visible);
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);
 
