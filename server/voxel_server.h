@@ -51,10 +51,6 @@ public:
 		VoxelMesher::Output surfaces;
 		Vector3i position;
 		uint8_t lod;
-		// Echo of BlockMeshInput::version: which request produced this output.
-		// Tasks read block data live when they run, so an output with version
-		// >= V reflects every edit made before request V was sent.
-		uint32_t version = 0;
 	};
 
 	struct BlockDataOutput {
@@ -80,7 +76,6 @@ public:
 		unsigned int data_blocks_count = 0;
 		Vector3i render_block_position;
 		uint8_t lod = 0;
-		uint32_t version = 0;
 	};
 
 	struct VolumeCallbacks {
@@ -382,7 +377,6 @@ private:
 		uint8_t data_block_size;
 		bool has_run = false;
 		bool too_far = false;
-		uint32_t version = 0;
 		PriorityDependency priority_dependency;
 		std::shared_ptr<MeshingDependency> meshing_dependency;
 		VoxelMesher::Output surfaces_output;

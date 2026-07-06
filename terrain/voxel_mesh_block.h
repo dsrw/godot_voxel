@@ -82,11 +82,6 @@ public:
 	void set_visible(bool visible);
 	bool is_visible() const;
 
-	// Hides the render meshes only — collision stays enabled. Used to show
-	// alternate geometry (e.g. animation frames) in place of the live mesh
-	// while physics keeps acting on the live voxels.
-	void set_render_visible(bool visible);
-
 	void set_parent_visible(bool parent_visible);
 	void set_parent_transform(const Transform &parent_transform);
 
@@ -139,15 +134,6 @@ private:
 
 	// Must match default value of `active`
 	bool _visible = false;
-	bool _render_visible = true;
-
-public:
-	// Version assigned to the most recent mesh request sent for this block.
-	// Monotonic per block; outputs echo the version of their request.
-	uint32_t last_mesh_request_version = 0;
-
-private:
-
 	bool _parent_visible = true;
 	MeshState _mesh_state = MESH_NEVER_UPDATED;
 	uint8_t _transition_mask = 0;

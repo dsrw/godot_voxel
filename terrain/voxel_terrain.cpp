@@ -1177,7 +1177,6 @@ void VoxelTerrain::process_meshing() {
 			VoxelServer::BlockMeshInput mesh_request;
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
-			mesh_request.version = ++mesh_block->last_mesh_request_version;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1251,13 +1250,17 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	// Reuse the block's existing ArrayMesh when possible: constructing one
 	// allocates its RID through the threaded VisualServer, and the RID pool
 	// refill blocks behind the render thread's current frame — stalling mesh
-	// bursts for whole frames at a time.
+	// bursts for whole frames at a time. Only when nobody else holds it
+	// (refcount: the block + our local ref) — a shared mesh (e.g. cached by
+	// a frame-animation receiver via get_block_mesh/set_block_mesh) must
+	// not be rebuilt in place under its other holders.
 	Ref<ArrayMesh> mesh = block->get_mesh();
-	if (mesh.is_valid()) {
+	if (mesh.is_valid() && mesh->reference_get_count() <= 2) {
 		while (mesh->get_surface_count() > 0) {
 			mesh->surface_remove(0);
 		}
 	} else {
+		mesh = Ref<ArrayMesh>();
 		mesh.instance();
 	}
 
@@ -1302,18 +1305,10 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		block->set_collision_mask(_collision_mask);
 	}
 	block->set_visible(true);
-	block->set_render_visible(_render_blocks_visible);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
 
-	// The version tells receivers which request produced this mesh. Tasks
-	// read block data live at run time, so an output whose version is
-	// greater than the block's version at some edit reflects that edit —
-	// receivers capturing meshes for their own edits gate on that, which
-	// (unlike requiring the newest version) can't be starved by neighbor
-	// border-remeshes.
-	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3(),
-			(int)ob.version);
+	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3());
 }
 
 Array VoxelTerrain::get_debug_paired_viewers() {
@@ -1352,14 +1347,6 @@ Dictionary VoxelTerrain::get_block_debug_info(Vector3 bpos) {
 	return d;
 }
 
-int VoxelTerrain::get_block_mesh_request_version(Vector3 bpos) {
-	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
-	if (block == nullptr) {
-		return 0;
-	}
-	return (int)block->last_mesh_request_version;
-}
-
 Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
 	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
 	if (block == nullptr) {
@@ -1376,22 +1363,47 @@ Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
 	return mesh;
 }
 
-void VoxelTerrain::set_render_blocks_visible(bool visible) {
-	if (visible == _render_blocks_visible) {
+void VoxelTerrain::set_block_mesh(Vector3 bpos, Ref<Mesh> mesh) {
+	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
+	if (block == nullptr) {
 		return;
 	}
-	_render_blocks_visible = visible;
+	block->set_mesh(mesh);
+	block->set_mesh_state(VoxelMeshBlock::MESH_UP_TO_DATE);
+	block->set_visible(true);
+	block->set_parent_visible(is_visible());
+	block->set_parent_transform(get_global_transform());
+}
 
-	struct SetRenderVisibilityAction {
-		bool visible;
-		SetRenderVisibilityAction(bool v) :
-				visible(v) {}
-		void operator()(VoxelMeshBlock *block) {
-			block->set_render_visible(visible);
+bool VoxelTerrain::set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool remesh) {
+	const Vector3i block_pos = Vector3i::from_floored(bpos);
+	VoxelDataBlock *block = _data_map.get_block(block_pos);
+	if (block == nullptr) {
+		return false;
+	}
+	const int bs = get_data_block_size();
+	ERR_FAIL_COND_V(values.size() != bs * bs * bs * 2, false);
+	VoxelBufferInternal &vb = block->get_voxels();
+	{
+		RWLockWrite wlock(vb.get_lock());
+		PoolByteArray::Read r = values.read();
+		const uint8_t *bytes = r.ptr();
+		int i = 0;
+		for (int x = 0; x < bs; ++x) {
+			for (int y = 0; y < bs; ++y) {
+				for (int z = 0; z < bs; ++z) {
+					const uint64_t v = uint64_t(bytes[i]) | (uint64_t(bytes[i + 1]) << 8);
+					i += 2;
+					vb.set_voxel(v, x, y, z, VoxelBufferInternal::CHANNEL_TYPE);
+				}
+			}
 		}
-	};
-
-	_mesh_map.for_all_blocks(SetRenderVisibilityAction(visible));
+	}
+	block->set_modified(true);
+	if (remesh) {
+		post_edit_area(Box3i(block_pos * bs, Vector3i(bs, bs, bs)));
+	}
+	return true;
 }
 
 Ref<VoxelTool> VoxelTerrain::get_voxel_tool() {
@@ -1489,21 +1501,19 @@ AABB VoxelTerrain::_b_get_bounds() const {
 
 void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_material", "id", "material"), &VoxelTerrain::set_material);
-	ClassDB::bind_method(D_METHOD("set_render_blocks_visible", "visible"),
-			&VoxelTerrain::set_render_blocks_visible);
 	ClassDB::bind_method(D_METHOD("get_block_mesh", "block_position", "take"),
 			&VoxelTerrain::get_block_mesh);
-	ClassDB::bind_method(D_METHOD("get_block_mesh_request_version", "block_position"),
-			&VoxelTerrain::get_block_mesh_request_version);
+	ClassDB::bind_method(D_METHOD("set_block_mesh", "block_position", "mesh"),
+			&VoxelTerrain::set_block_mesh);
+	ClassDB::bind_method(D_METHOD("set_block_voxel_data", "block_position", "values", "remesh"),
+			&VoxelTerrain::set_block_voxel_data);
 	ClassDB::bind_method(D_METHOD("get_block_debug_info", "block_position"),
 			&VoxelTerrain::get_block_debug_info);
 	ClassDB::bind_method(D_METHOD("get_debug_paired_viewers"), &VoxelTerrain::get_debug_paired_viewers);
 	ClassDB::bind_method(D_METHOD("set_viewer_distance_scale", "scale"),
 			&VoxelTerrain::set_viewer_distance_scale);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
-	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position"),
-			PropertyInfo(Variant::INT, "version")));
-	ClassDB::bind_method(D_METHOD("are_render_blocks_visible"), &VoxelTerrain::are_render_blocks_visible);
+	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position")));
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);
 
 	ClassDB::bind_method(D_METHOD("set_max_view_distance", "distance_in_voxels"), &VoxelTerrain::set_max_view_distance);

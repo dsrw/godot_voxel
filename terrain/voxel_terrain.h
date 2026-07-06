@@ -72,20 +72,20 @@ public:
 	void set_material(unsigned int id, Ref<Material> material);
 	Ref<Material> get_material(unsigned int id) const;
 
-	// Hides/shows every render mesh of this terrain without touching voxel
-	// data, collisions or child nodes. Used to display alternate geometry
-	// (e.g. animation frame meshes) in place of the live meshes.
-	void set_render_blocks_visible(bool visible);
-	bool are_render_blocks_visible() const { return _render_blocks_visible; }
-
 	// Current render mesh of a loaded block (null if none). With take, the
 	// mesh is detached from the block so later mesh updates can't mutate it.
 	Ref<Mesh> get_block_mesh(Vector3 bpos, bool take);
 
-	// Version of the newest mesh request sent for the block (0 if unloaded).
-	// Sample after an edit: any mesh_block_updated with a greater version
-	// was built from data that includes the edit.
-	int get_block_mesh_request_version(Vector3 bpos);
+	// Assign a block's render mesh directly (e.g. a cached animation-frame
+	// mesh), bypassing the meshing pipeline. The block is marked up to date
+	// so the display sticks until voxel data changes schedule a rebuild.
+	void set_block_mesh(Vector3 bpos, Ref<Mesh> mesh);
+
+	// Overwrite one data block's TYPE channel from packed u16 LE values in
+	// x-major (x, then y, then z) order. With remesh, the edit schedules
+	// mesh updates like any other; without, the data changes silently —
+	// callers pairing it with set_block_mesh already have the display.
+	bool set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool remesh);
 
 	// Debug: mesh state / viewer refcounts / mesh presence for one block.
 	Dictionary get_block_debug_info(Vector3 bpos);
@@ -240,7 +240,6 @@ private:
 	Ref<VoxelGenerator> _generator;
 
 	bool _generate_collisions = true;
-	bool _render_blocks_visible = true;
 	float _viewer_distance_scale = 1.f;
 	unsigned int _collision_layer = 1;
 	unsigned int _collision_mask = 1;
