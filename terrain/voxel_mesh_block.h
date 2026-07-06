@@ -141,6 +141,13 @@ private:
 	bool _visible = false;
 	bool _render_visible = true;
 
+public:
+	// Version assigned to the most recent mesh request sent for this block.
+	// Monotonic per block; outputs echo the version of their request.
+	uint32_t last_mesh_request_version = 0;
+
+private:
+
 	bool _parent_visible = true;
 	MeshState _mesh_state = MESH_NEVER_UPDATED;
 	uint8_t _transition_mask = 0;

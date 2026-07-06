@@ -1169,6 +1169,7 @@ void VoxelTerrain::process_meshing() {
 			VoxelServer::BlockMeshInput mesh_request;
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
+			mesh_request.version = ++mesh_block->last_mesh_request_version;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1292,12 +1293,22 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
 
-	// Note for receivers capturing meshes: tasks read block data live at run
-	// time, so any output reflects the block's data as of some point at or
-	// after its request. Gating on request version starves blocks whose
-	// neighbors keep re-meshing them (border edits bump the version faster
-	// than outputs can arrive), so every applied mesh emits.
-	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3());
+	// The version tells receivers which request produced this mesh. Tasks
+	// read block data live at run time, so an output whose version is
+	// greater than the block's version at some edit reflects that edit —
+	// receivers capturing meshes for their own edits gate on that, which
+	// (unlike requiring the newest version) can't be starved by neighbor
+	// border-remeshes.
+	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3(),
+			(int)ob.version);
+}
+
+int VoxelTerrain::get_block_mesh_request_version(Vector3 bpos) {
+	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
+	if (block == nullptr) {
+		return 0;
+	}
+	return (int)block->last_mesh_request_version;
 }
 
 Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
@@ -1433,7 +1444,10 @@ void VoxelTerrain::_bind_methods() {
 			&VoxelTerrain::set_render_blocks_visible);
 	ClassDB::bind_method(D_METHOD("get_block_mesh", "block_position", "take"),
 			&VoxelTerrain::get_block_mesh);
-	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position")));
+	ClassDB::bind_method(D_METHOD("get_block_mesh_request_version", "block_position"),
+			&VoxelTerrain::get_block_mesh_request_version);
+	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position"),
+			PropertyInfo(Variant::INT, "version")));
 	ClassDB::bind_method(D_METHOD("are_render_blocks_visible"), &VoxelTerrain::are_render_blocks_visible);
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);
 

@@ -73,6 +73,11 @@ public:
 	// mesh is detached from the block so later mesh updates can't mutate it.
 	Ref<Mesh> get_block_mesh(Vector3 bpos, bool take);
 
+	// Version of the newest mesh request sent for the block (0 if unloaded).
+	// Sample after an edit: any mesh_block_updated with a greater version
+	// was built from data that includes the edit.
+	int get_block_mesh_request_version(Vector3 bpos);
+
 	VoxelDataMap &get_storage() { return _data_map; }
 	const VoxelDataMap &get_storage() const { return _data_map; }
 
