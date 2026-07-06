@@ -146,14 +146,22 @@ bool VoxelMeshBlock::is_visible() const {
 	return _visible;
 }
 
+void VoxelMeshBlock::set_render_visible(bool visible) {
+	if (_render_visible == visible) {
+		return;
+	}
+	_render_visible = visible;
+	_set_visible(_visible && _parent_visible);
+}
+
 void VoxelMeshBlock::_set_visible(bool visible) {
 	if (_mesh_instance.is_valid()) {
-		set_mesh_instance_visible(_mesh_instance, visible);
+		set_mesh_instance_visible(_mesh_instance, visible && _render_visible);
 	}
 	for (unsigned int dir = 0; dir < _transition_mesh_instances.size(); ++dir) {
 		DirectMeshInstance &mi = _transition_mesh_instances[dir];
 		if (mi.is_valid()) {
-			set_mesh_instance_visible(mi, visible && _is_transition_visible(dir));
+			set_mesh_instance_visible(mi, visible && _render_visible && _is_transition_visible(dir));
 		}
 	}
 	if (_static_body.is_valid()) {

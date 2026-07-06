@@ -1287,7 +1287,8 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		block->set_collision_layer(_collision_layer);
 		block->set_collision_mask(_collision_mask);
 	}
-	block->set_visible(_render_blocks_visible);
+	block->set_visible(true);
+	block->set_render_visible(_render_blocks_visible);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
 }
@@ -1298,16 +1299,16 @@ void VoxelTerrain::set_render_blocks_visible(bool visible) {
 	}
 	_render_blocks_visible = visible;
 
-	struct SetVisibilityAction {
+	struct SetRenderVisibilityAction {
 		bool visible;
-		SetVisibilityAction(bool v) :
+		SetRenderVisibilityAction(bool v) :
 				visible(v) {}
 		void operator()(VoxelMeshBlock *block) {
-			block->set_visible(visible);
+			block->set_render_visible(visible);
 		}
 	};
 
-	_mesh_map.for_all_blocks(SetVisibilityAction(visible));
+	_mesh_map.for_all_blocks(SetRenderVisibilityAction(visible));
 }
 
 Ref<VoxelTool> VoxelTerrain::get_voxel_tool() {
