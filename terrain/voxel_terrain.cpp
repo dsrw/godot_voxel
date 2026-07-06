@@ -1292,6 +1292,11 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
 
+	// Note for receivers capturing meshes: tasks read block data live at run
+	// time, so any output reflects the block's data as of some point at or
+	// after its request. Gating on request version starves blocks whose
+	// neighbors keep re-meshing them (border edits bump the version faster
+	// than outputs can arrive), so every applied mesh emits.
 	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3());
 }
 
