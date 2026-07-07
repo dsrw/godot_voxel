@@ -343,6 +343,12 @@ Ref<Material> VoxelTerrain::get_material(unsigned int id) const {
 void VoxelTerrain::try_schedule_mesh_update(VoxelMeshBlock *mesh_block) {
 	CRASH_COND(mesh_block == nullptr);
 
+	// Bumped on every schedule attempt; the request sent for this block
+	// carries the latest value. With copy-on-write voxel writes, an output
+	// whose version is >= the value read just after scheduling is
+	// guaranteed to have baked the data present at schedule time.
+	++mesh_block->last_mesh_request_version;
+
 	if (mesh_block->get_mesh_state() == VoxelMeshBlock::MESH_UPDATE_NOT_SENT) {
 		// Already in the list
 		return;
@@ -1178,6 +1184,7 @@ void VoxelTerrain::process_meshing() {
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
 			mesh_request.cull_down_faces = _cull_down_faces;
+			mesh_request.version = mesh_block->last_mesh_request_version;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1232,6 +1239,36 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		//print_line("- no longer loaded");
 		// That block is no longer loaded, drop the result
 		++_stats.dropped_block_meshs;
+		return;
+	}
+
+	if (ob.frame_bake) {
+		// Never touches blocks: assemble the mesh and hand it to the
+		// receiver. A dropped bake (library re-bake in flight) just
+		// vanishes — receivers re-request on timeout.
+		if (ob.type == VoxelServer::BlockMeshOutput::TYPE_DROPPED) {
+			++_stats.dropped_block_meshs;
+			return;
+		}
+		Ref<ArrayMesh> mesh;
+		mesh.instance();
+		int surface_index = 0;
+		for (int i = 0; i < ob.surfaces.surfaces.size(); ++i) {
+			Array surface = ob.surfaces.surfaces[i];
+			if (surface.empty() || !is_surface_triangulated(surface)) {
+				continue;
+			}
+			mesh->add_surface_from_arrays(
+					ob.surfaces.primitive_type, surface, Array(), ob.surfaces.compression_flags);
+			mesh->surface_set_material(surface_index, _materials[i]);
+			++surface_index;
+		}
+		Ref<Mesh> result;
+		if (surface_index > 0) {
+			result = mesh;
+		}
+		emit_signal(VoxelStringNames::get_singleton()->frame_mesh_baked,
+				ob.position.to_vec3(), ob.tag, result);
 		return;
 	}
 
@@ -1309,7 +1346,8 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
 
-	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3());
+	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3(),
+			(int)ob.version);
 }
 
 Array VoxelTerrain::get_debug_paired_viewers() {
@@ -1362,6 +1400,49 @@ Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
 		block->set_mesh(Ref<Mesh>());
 	}
 	return mesh;
+}
+
+void VoxelTerrain::request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_t tag) {
+	Ref<VoxelMesher> mesher = _mesher;
+	ERR_FAIL_COND(mesher.is_null());
+	const int bs = get_data_block_size();
+	const int padded = bs + mesher->get_minimum_padding() + mesher->get_maximum_padding();
+	ERR_FAIL_COND(values.size() != padded * padded * padded * 2);
+
+	std::shared_ptr<VoxelBufferInternal> voxels = std::make_shared<VoxelBufferInternal>();
+	voxels->create(padded, padded, padded);
+	{
+		PoolByteArray::Read r = values.read();
+		const uint8_t *bytes = r.ptr();
+		int i = 0;
+		for (int x = 0; x < padded; ++x) {
+			for (int y = 0; y < padded; ++y) {
+				for (int z = 0; z < padded; ++z) {
+					const uint64_t v = uint64_t(bytes[i]) | (uint64_t(bytes[i + 1]) << 8);
+					i += 2;
+					if (v != 0) {
+						voxels->set_voxel(v, x, y, z, VoxelBufferInternal::CHANNEL_TYPE);
+					}
+				}
+			}
+		}
+	}
+	VoxelServer::get_singleton()->request_frame_mesh(
+			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces);
+}
+
+int VoxelTerrain::schedule_block_remesh(Vector3 bpos) {
+	// Central block only — no neighbor padding. Frame receivers use this
+	// after writing a block's data: the block's own borders bake against
+	// current neighbor data, and neighbors' cached meshes already match the
+	// content that was just written. Returns the request version to gate
+	// the capture on (0 if the block isn't loaded).
+	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
+	if (block == nullptr) {
+		return 0;
+	}
+	try_schedule_mesh_update(block);
+	return (int)block->last_mesh_request_version;
 }
 
 void VoxelTerrain::set_cull_down_faces(bool enabled) {
@@ -1523,9 +1604,17 @@ void VoxelTerrain::_bind_methods() {
 			&VoxelTerrain::set_viewer_distance_scale);
 	ClassDB::bind_method(D_METHOD("set_cull_down_faces", "enabled"),
 			&VoxelTerrain::set_cull_down_faces);
+	ClassDB::bind_method(D_METHOD("schedule_block_remesh", "block_position"),
+			&VoxelTerrain::schedule_block_remesh);
+	ClassDB::bind_method(D_METHOD("request_frame_mesh", "block_position", "values", "tag"),
+			&VoxelTerrain::request_frame_mesh);
 	ClassDB::bind_method(D_METHOD("get_cull_down_faces"), &VoxelTerrain::get_cull_down_faces);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
-	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position")));
+	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position"),
+			PropertyInfo(Variant::INT, "version")));
+	ADD_SIGNAL(MethodInfo("frame_mesh_baked", PropertyInfo(Variant::VECTOR3, "block_position"),
+			PropertyInfo(Variant::INT, "tag"),
+			PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh")));
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);
 
 	ClassDB::bind_method(D_METHOD("set_max_view_distance", "distance_in_voxels"), &VoxelTerrain::set_max_view_distance);

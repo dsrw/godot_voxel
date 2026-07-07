@@ -64,6 +64,16 @@ public:
 	// world units while remaining visually in range.
 	void set_viewer_distance_scale(float scale) { _viewer_distance_scale = scale; }
 
+	// Schedule a remesh of one block (no neighbor padding) and return the
+	// request version for capture gating. See the .cpp comment.
+	int schedule_block_remesh(Vector3 bpos);
+
+	// Bake a mesh from an explicit padded buffer (u16 LE type ids in
+	// x-major order, (block_size + 2)^3 cells) on the worker pool. The
+	// result arrives via the frame_mesh_baked signal with the same tag —
+	// a pure function of the supplied bytes, no world state involved.
+	void request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_t tag);
+
 	// Skip downward faces when meshing (sheet-like builds). Remeshes
 	// loaded blocks on change.
 	void set_cull_down_faces(bool enabled);

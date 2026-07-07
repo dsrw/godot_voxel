@@ -356,6 +356,7 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 	r->position = input.render_block_position;
 	r->lod = input.lod;
 	r->cull_down_faces = input.cull_down_faces;
+	r->version = input.version;
 	r->meshing_dependency = volume.meshing_dependency;
 	r->data_block_size = volume.data_block_size;
 
@@ -363,6 +364,29 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 			r->priority_dependency, input.render_block_position, input.lod, volume, volume.render_block_size);
 
 	// We'll allocate this quite often. If it becomes a problem, it should be easy to pool.
+	_general_thread_pool.enqueue(r);
+}
+
+void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
+		std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces) {
+	const Volume &volume = _world.volumes.get(volume_id);
+	ERR_FAIL_COND(volume.meshing_dependency == nullptr);
+	ERR_FAIL_COND(volume.meshing_dependency->mesher.is_null());
+
+	BlockMeshRequest *r = memnew(BlockMeshRequest);
+	r->volume_id = volume_id;
+	r->blocks_count = 0;
+	r->position = render_block_position;
+	r->lod = 0;
+	r->cull_down_faces = cull_down_faces;
+	r->explicit_voxels = voxels;
+	r->tag = tag;
+	r->meshing_dependency = volume.meshing_dependency;
+	r->data_block_size = volume.data_block_size;
+
+	init_priority_dependency(
+			r->priority_dependency, render_block_position, 0, volume, volume.render_block_size);
+
 	_general_thread_pool.enqueue(r);
 }
 
@@ -1172,6 +1196,15 @@ void VoxelServer::BlockMeshRequest::run(VoxelTaskContext ctx) {
 	const unsigned int min_padding = mesher->get_minimum_padding();
 	const unsigned int max_padding = mesher->get_maximum_padding();
 
+	if (explicit_voxels != nullptr) {
+		// Frame bake: the receiver supplied the exact padded content — a
+		// pure function of data, independent of any world state.
+		const VoxelMesher::Input input = { *explicit_voxels, lod, cull_down_faces };
+		mesher->build(surfaces_output, input);
+		has_run = true;
+		return;
+	}
+
 	// TODO Cache?
 	VoxelBufferInternal voxels;
 	copy_block_and_neighbors(to_span(blocks, blocks_count),
@@ -1214,6 +1247,9 @@ void VoxelServer::BlockMeshRequest::apply_result() {
 
 			o.position = position;
 			o.lod = lod;
+			o.version = version;
+			o.frame_bake = explicit_voxels != nullptr;
+			o.tag = tag;
 			o.surfaces = surfaces_output;
 
 			ERR_FAIL_COND(volume->callbacks.mesh_output_callback == nullptr);

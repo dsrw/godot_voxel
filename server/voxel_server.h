@@ -51,6 +51,13 @@ public:
 		VoxelMesher::Output surfaces;
 		Vector3i position;
 		uint8_t lod;
+		// Echo of BlockMeshInput::version (unused by frame bakes).
+		uint32_t version = 0;
+		// Frame bake: the mesh was built from an explicit buffer supplied
+		// by the receiver, not from world data — deliver via signal, never
+		// touch blocks. `tag` echoes the caller's identifier (content key).
+		bool frame_bake = false;
+		int64_t tag = 0;
 	};
 
 	struct BlockDataOutput {
@@ -77,6 +84,7 @@ public:
 		Vector3i render_block_position;
 		uint8_t lod = 0;
 		bool cull_down_faces = false;
+		uint32_t version = 0;
 	};
 
 	struct VolumeCallbacks {
@@ -128,6 +136,12 @@ public:
 	void set_volume_octree_lod_distance(uint32_t volume_id, float lod_distance);
 	void invalidate_volume_mesh_requests(uint32_t volume_id);
 	void request_block_mesh(uint32_t volume_id, const BlockMeshInput &input);
+
+	// Mesh an explicit padded buffer on the worker pool — a pure function
+	// of the supplied data (frame animation bakes). The result arrives at
+	// the volume's mesh_output_callback with frame_bake set.
+	void request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
+			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces);
 	// TODO Add parameter to skip stream loading
 	void request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances);
 	void request_block_generate(uint32_t volume_id, Vector3i block_pos, int lod,
@@ -379,6 +393,11 @@ private:
 		bool has_run = false;
 		bool too_far = false;
 		bool cull_down_faces = false;
+		uint32_t version = 0;
+		// Frame bake: mesh `explicit_voxels` (already padded) instead of
+		// assembling from world blocks.
+		std::shared_ptr<VoxelBufferInternal> explicit_voxels;
+		int64_t tag = 0;
 		PriorityDependency priority_dependency;
 		std::shared_ptr<MeshingDependency> meshing_dependency;
 		VoxelMesher::Output surfaces_output;

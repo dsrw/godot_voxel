@@ -134,6 +134,14 @@ private:
 
 	// Must match default value of `active`
 	bool _visible = false;
+
+public:
+	// Version of the newest mesh request scheduled for this block; outputs
+	// echo the version of their request. Combined with copy-on-write voxel
+	// writes this attributes an output to its content exactly.
+	uint32_t last_mesh_request_version = 0;
+
+private:
 	bool _parent_visible = true;
 	MeshState _mesh_state = MESH_NEVER_UPDATED;
 	uint8_t _transition_mask = 0;
