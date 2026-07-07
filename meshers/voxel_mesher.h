@@ -14,6 +14,9 @@ public:
 	struct Input {
 		const VoxelBufferInternal &voxels;
 		int lod; // = 0; // Not initialized because it confused GCC
+		// Skip downward faces entirely (sheet-like builds: an ocean slab's
+		// underside is never visible but costs ~a third of its geometry).
+		bool cull_down_faces = false;
 	};
 
 	struct Output {

@@ -63,6 +63,11 @@ public:
 	// viewer asked for — otherwise meshes stop at view_distance × scale
 	// world units while remaining visually in range.
 	void set_viewer_distance_scale(float scale) { _viewer_distance_scale = scale; }
+
+	// Skip downward faces when meshing (sheet-like builds). Remeshes
+	// loaded blocks on change.
+	void set_cull_down_faces(bool enabled);
+	bool get_cull_down_faces() const { return _cull_down_faces; }
 	float get_viewer_distance_scale() const { return _viewer_distance_scale; }
 
 	// TODO Make this obsolete with multi-viewers
@@ -241,6 +246,7 @@ private:
 
 	bool _generate_collisions = true;
 	float _viewer_distance_scale = 1.f;
+	bool _cull_down_faces = false;
 	unsigned int _collision_layer = 1;
 	unsigned int _collision_mask = 1;
 	float _collision_margin = VoxelConstants::DEFAULT_COLLISION_MARGIN;

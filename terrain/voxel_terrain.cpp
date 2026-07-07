@@ -1177,6 +1177,7 @@ void VoxelTerrain::process_meshing() {
 			VoxelServer::BlockMeshInput mesh_request;
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
+			mesh_request.cull_down_faces = _cull_down_faces;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1363,6 +1364,14 @@ Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
 	return mesh;
 }
 
+void VoxelTerrain::set_cull_down_faces(bool enabled) {
+	if (enabled == _cull_down_faces) {
+		return;
+	}
+	_cull_down_faces = enabled;
+	remesh_all_blocks();
+}
+
 void VoxelTerrain::set_block_mesh(Vector3 bpos, Ref<Mesh> mesh) {
 	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
 	if (block == nullptr) {
@@ -1512,6 +1521,9 @@ void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_debug_paired_viewers"), &VoxelTerrain::get_debug_paired_viewers);
 	ClassDB::bind_method(D_METHOD("set_viewer_distance_scale", "scale"),
 			&VoxelTerrain::set_viewer_distance_scale);
+	ClassDB::bind_method(D_METHOD("set_cull_down_faces", "enabled"),
+			&VoxelTerrain::set_cull_down_faces);
+	ClassDB::bind_method(D_METHOD("get_cull_down_faces"), &VoxelTerrain::get_cull_down_faces);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
 	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position")));
 	ClassDB::bind_method(D_METHOD("get_material", "id"), &VoxelTerrain::get_material);

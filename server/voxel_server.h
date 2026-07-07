@@ -76,6 +76,7 @@ public:
 		unsigned int data_blocks_count = 0;
 		Vector3i render_block_position;
 		uint8_t lod = 0;
+		bool cull_down_faces = false;
 	};
 
 	struct VolumeCallbacks {
@@ -377,6 +378,7 @@ private:
 		uint8_t data_block_size;
 		bool has_run = false;
 		bool too_far = false;
+		bool cull_down_faces = false;
 		PriorityDependency priority_dependency;
 		std::shared_ptr<MeshingDependency> meshing_dependency;
 		VoxelMesher::Output surfaces_output;

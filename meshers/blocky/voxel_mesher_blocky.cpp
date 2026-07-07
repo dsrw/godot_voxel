@@ -55,7 +55,7 @@ static void generate_blocky_mesh(
 		const Span<Type_T> type_buffer,
 		const Vector3i block_size,
 		const VoxelLibrary::BakedData &library,
-		bool bake_occlusion, float baked_occlusion_darkness) {
+		bool bake_occlusion, float baked_occlusion_darkness, bool cull_down_faces) {
 	ERR_FAIL_COND(block_size.x < static_cast<int>(2 * VoxelMesherBlocky::PADDING) ||
 				  block_size.y < static_cast<int>(2 * VoxelMesherBlocky::PADDING) ||
 				  block_size.z < static_cast<int>(2 * VoxelMesherBlocky::PADDING));
@@ -158,6 +158,9 @@ static void generate_blocky_mesh(
 
 					// Sides
 					for (unsigned int side = 0; side < Cube::SIDE_COUNT; ++side) {
+						if (cull_down_faces && side == Cube::SIDE_NEGATIVE_Y) {
+							continue;
+						}
 						const std::vector<Vector3> &side_positions = voxel.model.side_positions[side];
 						const unsigned int vertex_count = side_positions.size();
 
@@ -475,12 +478,12 @@ void VoxelMesherBlocky::build(VoxelMesher::Output &output, const VoxelMesher::In
 		switch (channel_depth) {
 			case VoxelBufferInternal::DEPTH_8_BIT:
 				generate_blocky_mesh(cache.arrays_per_material, raw_channel,
-						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness);
+						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness, input.cull_down_faces);
 				break;
 
 			case VoxelBufferInternal::DEPTH_16_BIT:
 				generate_blocky_mesh(cache.arrays_per_material, raw_channel.reinterpret_cast_to<uint16_t>(),
-						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness);
+						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness, input.cull_down_faces);
 				break;
 
 			default:

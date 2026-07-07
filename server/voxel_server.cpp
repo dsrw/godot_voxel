@@ -355,6 +355,7 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 	r->blocks_count = input.data_blocks_count;
 	r->position = input.render_block_position;
 	r->lod = input.lod;
+	r->cull_down_faces = input.cull_down_faces;
 	r->meshing_dependency = volume.meshing_dependency;
 	r->data_block_size = volume.data_block_size;
 
@@ -1177,7 +1178,7 @@ void VoxelServer::BlockMeshRequest::run(VoxelTaskContext ctx) {
 			voxels, min_padding, max_padding, mesher->get_used_channels_mask(),
 			meshing_dependency->generator, data_block_size, lod, position);
 
-	const VoxelMesher::Input input = { voxels, lod };
+	const VoxelMesher::Input input = { voxels, lod, cull_down_faces };
 	mesher->build(surfaces_output, input);
 
 	has_run = true;
