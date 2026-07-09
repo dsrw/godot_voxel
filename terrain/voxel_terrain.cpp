@@ -343,12 +343,6 @@ Ref<Material> VoxelTerrain::get_material(unsigned int id) const {
 void VoxelTerrain::try_schedule_mesh_update(VoxelMeshBlock *mesh_block) {
 	CRASH_COND(mesh_block == nullptr);
 
-	// Bumped on every schedule attempt; the request sent for this block
-	// carries the latest value. With copy-on-write voxel writes, an output
-	// whose version is >= the value read just after scheduling is
-	// guaranteed to have baked the data present at schedule time.
-	++mesh_block->last_mesh_request_version;
-
 	if (mesh_block->get_mesh_state() == VoxelMeshBlock::MESH_UPDATE_NOT_SENT) {
 		// Already in the list
 		return;
@@ -1184,7 +1178,6 @@ void VoxelTerrain::process_meshing() {
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
 			mesh_request.cull_down_faces = _cull_down_faces;
-			mesh_request.version = mesh_block->last_mesh_request_version;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1289,9 +1282,9 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	// allocates its RID through the threaded VisualServer, and the RID pool
 	// refill blocks behind the render thread's current frame — stalling mesh
 	// bursts for whole frames at a time. Only when nobody else holds it
-	// (refcount: the block + our local ref) — a shared mesh (e.g. cached by
-	// a frame-animation receiver via get_block_mesh/set_block_mesh) must
-	// not be rebuilt in place under its other holders.
+	// (refcount: the block + our local ref) — a shared mesh (e.g. one a
+	// frame-animation receiver cached and re-assigned via set_block_mesh)
+	// must not be rebuilt in place under its other holders.
 	Ref<ArrayMesh> mesh = block->get_mesh();
 	if (mesh.is_valid() && mesh->reference_get_count() <= 2) {
 		while (mesh->get_surface_count() > 0) {
@@ -1345,9 +1338,6 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	block->set_visible(true);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
-
-	emit_signal(VoxelStringNames::get_singleton()->mesh_block_updated, ob.position.to_vec3(),
-			(int)ob.version);
 }
 
 Array VoxelTerrain::get_debug_paired_viewers() {
@@ -1368,38 +1358,6 @@ Array VoxelTerrain::get_debug_paired_viewers() {
 	bounds["max_view_distance"] = (int)_max_view_distance_voxels;
 	a.append(bounds);
 	return a;
-}
-
-Dictionary VoxelTerrain::get_block_debug_info(Vector3 bpos) {
-	Dictionary d;
-	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
-	if (block == nullptr) {
-		d["exists"] = false;
-		return d;
-	}
-	d["exists"] = true;
-	d["mesh_state"] = (int)block->get_mesh_state();
-	d["mesh_viewers"] = (int)block->mesh_viewers.get();
-	d["collision_viewers"] = (int)block->collision_viewers.get();
-	d["has_mesh"] = block->get_mesh().is_valid();
-	d["visible"] = block->is_visible();
-	return d;
-}
-
-Ref<Mesh> VoxelTerrain::get_block_mesh(Vector3 bpos, bool take) {
-	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
-	if (block == nullptr) {
-		return Ref<Mesh>();
-	}
-	Ref<Mesh> mesh = block->get_mesh();
-	if (take) {
-		// Detach the mesh from the block so future updates can't mutate it
-		// (mesh updates reuse the block's ArrayMesh in place). The block goes
-		// meshless until its next update — callers take while render blocks
-		// are hidden.
-		block->set_mesh(Ref<Mesh>());
-	}
-	return mesh;
 }
 
 void VoxelTerrain::request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_t tag) {
@@ -1429,20 +1387,6 @@ void VoxelTerrain::request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_
 	}
 	VoxelServer::get_singleton()->request_frame_mesh(
 			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces);
-}
-
-int VoxelTerrain::schedule_block_remesh(Vector3 bpos) {
-	// Central block only — no neighbor padding. Frame receivers use this
-	// after writing a block's data: the block's own borders bake against
-	// current neighbor data, and neighbors' cached meshes already match the
-	// content that was just written. Returns the request version to gate
-	// the capture on (0 if the block isn't loaded).
-	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
-	if (block == nullptr) {
-		return 0;
-	}
-	try_schedule_mesh_update(block);
-	return (int)block->last_mesh_request_version;
 }
 
 void VoxelTerrain::set_cull_down_faces(bool enabled) {
@@ -1591,27 +1535,19 @@ AABB VoxelTerrain::_b_get_bounds() const {
 
 void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_material", "id", "material"), &VoxelTerrain::set_material);
-	ClassDB::bind_method(D_METHOD("get_block_mesh", "block_position", "take"),
-			&VoxelTerrain::get_block_mesh);
 	ClassDB::bind_method(D_METHOD("set_block_mesh", "block_position", "mesh"),
 			&VoxelTerrain::set_block_mesh);
 	ClassDB::bind_method(D_METHOD("set_block_voxel_data", "block_position", "values", "remesh"),
 			&VoxelTerrain::set_block_voxel_data);
-	ClassDB::bind_method(D_METHOD("get_block_debug_info", "block_position"),
-			&VoxelTerrain::get_block_debug_info);
 	ClassDB::bind_method(D_METHOD("get_debug_paired_viewers"), &VoxelTerrain::get_debug_paired_viewers);
 	ClassDB::bind_method(D_METHOD("set_viewer_distance_scale", "scale"),
 			&VoxelTerrain::set_viewer_distance_scale);
 	ClassDB::bind_method(D_METHOD("set_cull_down_faces", "enabled"),
 			&VoxelTerrain::set_cull_down_faces);
-	ClassDB::bind_method(D_METHOD("schedule_block_remesh", "block_position"),
-			&VoxelTerrain::schedule_block_remesh);
 	ClassDB::bind_method(D_METHOD("request_frame_mesh", "block_position", "values", "tag"),
 			&VoxelTerrain::request_frame_mesh);
 	ClassDB::bind_method(D_METHOD("get_cull_down_faces"), &VoxelTerrain::get_cull_down_faces);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
-	ADD_SIGNAL(MethodInfo("mesh_block_updated", PropertyInfo(Variant::VECTOR3, "block_position"),
-			PropertyInfo(Variant::INT, "version")));
 	ADD_SIGNAL(MethodInfo("frame_mesh_baked", PropertyInfo(Variant::VECTOR3, "block_position"),
 			PropertyInfo(Variant::INT, "tag"),
 			PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh")));

@@ -64,10 +64,6 @@ public:
 	// world units while remaining visually in range.
 	void set_viewer_distance_scale(float scale) { _viewer_distance_scale = scale; }
 
-	// Schedule a remesh of one block (no neighbor padding) and return the
-	// request version for capture gating. See the .cpp comment.
-	int schedule_block_remesh(Vector3 bpos);
-
 	// Bake a mesh from an explicit padded buffer (u16 LE type ids in
 	// x-major order, (block_size + 2)^3 cells) on the worker pool. The
 	// result arrives via the frame_mesh_baked signal with the same tag —
@@ -87,10 +83,6 @@ public:
 	void set_material(unsigned int id, Ref<Material> material);
 	Ref<Material> get_material(unsigned int id) const;
 
-	// Current render mesh of a loaded block (null if none). With take, the
-	// mesh is detached from the block so later mesh updates can't mutate it.
-	Ref<Mesh> get_block_mesh(Vector3 bpos, bool take);
-
 	// Assign a block's render mesh directly (e.g. a cached animation-frame
 	// mesh), bypassing the meshing pipeline. The block is marked up to date
 	// so the display sticks until voxel data changes schedule a rebuild.
@@ -102,8 +94,6 @@ public:
 	// callers pairing it with set_block_mesh already have the display.
 	bool set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool remesh);
 
-	// Debug: mesh state / viewer refcounts / mesh presence for one block.
-	Dictionary get_block_debug_info(Vector3 bpos);
 	Array get_debug_paired_viewers();
 
 	VoxelDataMap &get_storage() { return _data_map; }

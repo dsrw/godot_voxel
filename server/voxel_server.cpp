@@ -356,7 +356,6 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 	r->position = input.render_block_position;
 	r->lod = input.lod;
 	r->cull_down_faces = input.cull_down_faces;
-	r->version = input.version;
 	r->meshing_dependency = volume.meshing_dependency;
 	r->data_block_size = volume.data_block_size;
 
@@ -1247,7 +1246,6 @@ void VoxelServer::BlockMeshRequest::apply_result() {
 
 			o.position = position;
 			o.lod = lod;
-			o.version = version;
 			o.frame_bake = explicit_voxels != nullptr;
 			o.tag = tag;
 			o.surfaces = surfaces_output;

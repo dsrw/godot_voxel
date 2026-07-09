@@ -51,8 +51,6 @@ public:
 		VoxelMesher::Output surfaces;
 		Vector3i position;
 		uint8_t lod;
-		// Echo of BlockMeshInput::version (unused by frame bakes).
-		uint32_t version = 0;
 		// Frame bake: the mesh was built from an explicit buffer supplied
 		// by the receiver, not from world data — deliver via signal, never
 		// touch blocks. `tag` echoes the caller's identifier (content key).
@@ -84,7 +82,6 @@ public:
 		Vector3i render_block_position;
 		uint8_t lod = 0;
 		bool cull_down_faces = false;
-		uint32_t version = 0;
 	};
 
 	struct VolumeCallbacks {
@@ -393,7 +390,6 @@ private:
 		bool has_run = false;
 		bool too_far = false;
 		bool cull_down_faces = false;
-		uint32_t version = 0;
 		// Frame bake: mesh `explicit_voxels` (already padded) instead of
 		// assembling from world blocks.
 		std::shared_ptr<VoxelBufferInternal> explicit_voxels;

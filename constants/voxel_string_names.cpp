@@ -20,7 +20,6 @@ VoxelStringNames::VoxelStringNames() {
 	_get_used_channels_mask = StaticCString::create("_get_used_channels_mask");
 
 	block_loaded = StaticCString::create("block_loaded");
-	mesh_block_updated = StaticCString::create("mesh_block_updated");
 	frame_mesh_baked = StaticCString::create("frame_mesh_baked");
 	block_unloaded = StaticCString::create("block_unloaded");
 
