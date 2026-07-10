@@ -82,6 +82,7 @@ public:
 		Vector3i render_block_position;
 		uint8_t lod = 0;
 		bool cull_down_faces = false;
+		bool greedy = false;
 	};
 
 	struct VolumeCallbacks {
@@ -138,7 +139,7 @@ public:
 	// of the supplied data (frame animation bakes). The result arrives at
 	// the volume's mesh_output_callback with frame_bake set.
 	void request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
-			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces);
+			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy);
 	// TODO Add parameter to skip stream loading
 	void request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances);
 	void request_block_generate(uint32_t volume_id, Vector3i block_pos, int lod,
@@ -390,6 +391,7 @@ private:
 		bool has_run = false;
 		bool too_far = false;
 		bool cull_down_faces = false;
+		bool greedy = false;
 		// Frame bake: mesh `explicit_voxels` (already padded) instead of
 		// assembling from world blocks.
 		std::shared_ptr<VoxelBufferInternal> explicit_voxels;

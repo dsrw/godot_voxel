@@ -1178,6 +1178,7 @@ void VoxelTerrain::process_meshing() {
 			mesh_request.render_block_position = mesh_block_pos;
 			mesh_request.lod = 0;
 			mesh_request.cull_down_faces = _cull_down_faces;
+			mesh_request.greedy = _greedy;
 			//mesh_request.data_blocks_count = data_box.size.volume();
 
 			// This iteration order is specifically chosen to match VoxelServer and threaded access
@@ -1386,7 +1387,15 @@ void VoxelTerrain::request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_
 		}
 	}
 	VoxelServer::get_singleton()->request_frame_mesh(
-			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces);
+			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces, _greedy);
+}
+
+void VoxelTerrain::set_greedy_meshing(bool enabled) {
+	if (enabled == _greedy) {
+		return;
+	}
+	_greedy = enabled;
+	remesh_all_blocks();
 }
 
 void VoxelTerrain::set_cull_down_faces(bool enabled) {
@@ -1547,6 +1556,9 @@ void VoxelTerrain::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("request_frame_mesh", "block_position", "values", "tag"),
 			&VoxelTerrain::request_frame_mesh);
 	ClassDB::bind_method(D_METHOD("get_cull_down_faces"), &VoxelTerrain::get_cull_down_faces);
+	ClassDB::bind_method(D_METHOD("set_greedy_meshing", "enabled"),
+			&VoxelTerrain::set_greedy_meshing);
+	ClassDB::bind_method(D_METHOD("get_greedy_meshing"), &VoxelTerrain::get_greedy_meshing);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
 	ADD_SIGNAL(MethodInfo("frame_mesh_baked", PropertyInfo(Variant::VECTOR3, "block_position"),
 			PropertyInfo(Variant::INT, "tag"),

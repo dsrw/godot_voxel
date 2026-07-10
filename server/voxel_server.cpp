@@ -356,6 +356,7 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 	r->position = input.render_block_position;
 	r->lod = input.lod;
 	r->cull_down_faces = input.cull_down_faces;
+	r->greedy = input.greedy;
 	r->meshing_dependency = volume.meshing_dependency;
 	r->data_block_size = volume.data_block_size;
 
@@ -367,7 +368,7 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 }
 
 void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
-		std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces) {
+		std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy) {
 	const Volume &volume = _world.volumes.get(volume_id);
 	ERR_FAIL_COND(volume.meshing_dependency == nullptr);
 	ERR_FAIL_COND(volume.meshing_dependency->mesher.is_null());
@@ -378,6 +379,7 @@ void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_p
 	r->position = render_block_position;
 	r->lod = 0;
 	r->cull_down_faces = cull_down_faces;
+	r->greedy = greedy;
 	r->explicit_voxels = voxels;
 	r->tag = tag;
 	r->meshing_dependency = volume.meshing_dependency;
@@ -1198,7 +1200,7 @@ void VoxelServer::BlockMeshRequest::run(VoxelTaskContext ctx) {
 	if (explicit_voxels != nullptr) {
 		// Frame bake: the receiver supplied the exact padded content — a
 		// pure function of data, independent of any world state.
-		const VoxelMesher::Input input = { *explicit_voxels, lod, cull_down_faces };
+		const VoxelMesher::Input input = { *explicit_voxels, lod, cull_down_faces, greedy };
 		mesher->build(surfaces_output, input);
 		has_run = true;
 		return;
@@ -1210,7 +1212,7 @@ void VoxelServer::BlockMeshRequest::run(VoxelTaskContext ctx) {
 			voxels, min_padding, max_padding, mesher->get_used_channels_mask(),
 			meshing_dependency->generator, data_block_size, lod, position);
 
-	const VoxelMesher::Input input = { voxels, lod, cull_down_faces };
+	const VoxelMesher::Input input = { voxels, lod, cull_down_faces, greedy };
 	mesher->build(surfaces_output, input);
 
 	has_run = true;

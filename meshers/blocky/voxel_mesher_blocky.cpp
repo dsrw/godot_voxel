@@ -49,13 +49,268 @@ inline bool contributes_to_ao(const VoxelLibrary::BakedData &lib, uint32_t voxel
 
 } // namespace
 
+// ---- Greedy meshing --------------------------------------------------------
+// Merges coplanar, same-voxel, UNIFORMLY-SHADED cube faces into large
+// rectangles. Faces with per-corner AO gradients and non-cube models are left
+// to generate_blocky_mesh (which skips the faces handled here). A uniformly
+// shaded face bakes to one flat colour, so the merged quad is exact — no AO
+// detail is lost.
+
+static inline float mb_axis_get(const Vector3 &v, int a) {
+	return a == 0 ? v.x : (a == 1 ? v.y : v.z);
+}
+static inline void mb_axis_set(Vector3 &v, int a, float val) {
+	if (a == 0) {
+		v.x = val;
+	} else if (a == 1) {
+		v.y = val;
+	} else {
+		v.z = val;
+	}
+}
+
+// Per-corner AO shading for one face (mirrors generate_blocky_mesh). Enu bakes
+// AO into vertex colours and its "air" model contributes to AO, so exposed
+// faces are never fully lit — instead the greedy pass merges faces whose four
+// corners share ONE shade value, which a single flat colour reproduces exactly.
+// Returns that common shade (0..3) if the face is uniformly shaded, else -1.
+template <typename Type_T>
+static int mb_face_uniform_shade(const Span<Type_T> type_buffer, int voxel_index, int side,
+		const VoxelLibrary::BakedData &library,
+		const VoxelFixedArray<int, Cube::EDGE_COUNT> &edge_neighbor_lut,
+		const VoxelFixedArray<int, Cube::CORNER_COUNT> &corner_neighbor_lut) {
+	int shaded_corner[8] = { 0 };
+	for (unsigned int j = 0; j < 4; ++j) {
+		const unsigned int edge = Cube::g_side_edges[side][j];
+		const int edge_neighbor_id = type_buffer[voxel_index + edge_neighbor_lut[edge]];
+		if (contributes_to_ao(library, edge_neighbor_id)) {
+			++shaded_corner[Cube::g_edge_corners[edge][0]];
+			++shaded_corner[Cube::g_edge_corners[edge][1]];
+		}
+	}
+	for (unsigned int j = 0; j < 4; ++j) {
+		const unsigned int corner = Cube::g_side_corners[side][j];
+		if (shaded_corner[corner] == 2) {
+			shaded_corner[corner] = 3;
+		} else {
+			const int corner_neigbor_id = type_buffer[voxel_index + corner_neighbor_lut[corner]];
+			if (contributes_to_ao(library, corner_neigbor_id)) {
+				++shaded_corner[corner];
+			}
+		}
+	}
+	const int s0 = shaded_corner[Cube::g_side_corners[side][0]];
+	for (unsigned int j = 1; j < 4; ++j) {
+		if (shaded_corner[Cube::g_side_corners[side][j]] != s0) {
+			return -1;
+		}
+	}
+	return s0;
+}
+
+// If this voxel's face on `side` is one the greedy pass handles — a plain cube
+// face (single unit quad, no inner mesh), visible, and uniformly shaded — return
+// its shade (0..3); else -1. Both the greedy pass and generate_blocky_mesh test
+// this so exactly one emits each face. With bake_occlusion off, shade is 0.
+template <typename Type_T>
+static inline int mb_greedy_face(const Span<Type_T> type_buffer, int voxel_index, int side,
+		const VoxelLibrary::BakedData &library, bool bake_occlusion,
+		const VoxelFixedArray<int, Cube::SIDE_COUNT> &side_neighbor_lut,
+		const VoxelFixedArray<int, Cube::EDGE_COUNT> &edge_neighbor_lut,
+		const VoxelFixedArray<int, Cube::CORNER_COUNT> &corner_neighbor_lut) {
+	const int voxel_id = type_buffer[voxel_index];
+	if (voxel_id == 0 || !library.has_model(voxel_id)) {
+		return -1;
+	}
+	const Voxel::BakedData &voxel = library.models[voxel_id];
+	if (voxel.model.positions.size() != 0 || voxel.model.side_positions[side].size() != 4) {
+		return -1; // not a plain cube face
+	}
+	const uint32_t neighbor_voxel_id = type_buffer[voxel_index + side_neighbor_lut[side]];
+	if (!is_face_visible(library, voxel, neighbor_voxel_id, side)) {
+		return -1;
+	}
+	if (!bake_occlusion) {
+		return 0;
+	}
+	return mb_face_uniform_shade(type_buffer, voxel_index, side, library, edge_neighbor_lut, corner_neighbor_lut);
+}
+
+// Emit one merged rectangle: `w`x`h` voxels on `side`, base voxel at padded
+// (nc along normal axis na, u0 along ua, v0 along va).
+static void mb_emit_rect(
+		VoxelFixedArray<VoxelMesherBlocky::Arrays, VoxelMesherBlocky::MAX_MATERIALS> &out_arrays_per_material,
+		const VoxelLibrary::BakedData &library, int voxel_id, int side,
+		int na, int ua, int va, int nc, int u0, int v0, int w, int h,
+		int shade, float baked_occlusion_darkness) {
+	const Voxel::BakedData &voxel = library.models[voxel_id];
+	VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[voxel.material_id];
+	const std::vector<Vector3> &sp = voxel.model.side_positions[side];
+	const std::vector<Vector2> &su = voxel.model.side_uvs[side];
+	const std::vector<int> &si = voxel.model.side_indices[side];
+	const std::vector<float> &st = voxel.model.side_tangents[side];
+	const int base = arrays.positions.size();
+	const int PAD = VoxelMesherBlocky::PADDING;
+	const Vector3 normal = Cube::g_side_normals[side].to_vec3();
+	// Uniform shade over the whole face: one flat colour matches what the
+	// per-face path bakes (each vertex takes its nearest corner's shade, and
+	// all four corners share `shade` here).
+	float gs = 1.0f - CLAMP(baked_occlusion_darkness * (float)shade, 0.0f, 1.0f);
+	const Color rect_color = Color(gs, gs, gs) * voxel.color;
+
+	for (unsigned int k = 0; k < sp.size(); ++k) {
+		const Vector3 &uv_vert = sp[k]; // unit-cube face vertex, components 0/1
+		Vector3 out;
+		mb_axis_set(out, na, (nc - PAD) + mb_axis_get(uv_vert, na));
+		mb_axis_set(out, ua, (u0 - PAD) + (mb_axis_get(uv_vert, ua) == 0.f ? 0.f : (float)w));
+		mb_axis_set(out, va, (v0 - PAD) + (mb_axis_get(uv_vert, va) == 0.f ? 0.f : (float)h));
+		arrays.positions.push_back(out);
+		arrays.normals.push_back(normal);
+		arrays.colors.push_back(rect_color);
+		// Tile the texture across the merged quad (0..w, 0..h) instead of
+		// stretching one 0..1 copy. Needs REPEAT wrap on the material.
+		const Vector2 uv = (k < su.size()) ? su[k] : Vector2();
+		arrays.uvs.push_back(Vector2(uv.x * w, uv.y * h));
+		if (st.size() >= (k + 1) * 4) {
+			for (int t = 0; t < 4; ++t) {
+				arrays.tangents.push_back(st[k * 4 + t]);
+			}
+		}
+	}
+	for (unsigned int j = 0; j < si.size(); ++j) {
+		arrays.indices.push_back(base + si[j]);
+	}
+}
+
+template <typename Type_T>
+static void generate_blocky_greedy_pass(
+		VoxelFixedArray<VoxelMesherBlocky::Arrays, VoxelMesherBlocky::MAX_MATERIALS> &out_arrays_per_material,
+		const Span<Type_T> type_buffer, const Vector3i block_size,
+		const VoxelLibrary::BakedData &library, bool bake_occlusion,
+		float baked_occlusion_darkness, bool cull_down_faces) {
+	const int row_size = block_size.y;
+	const int deck_size = block_size.x * row_size;
+	const int stride[3] = { row_size, 1, deck_size }; // X, Y, Z index strides
+
+	// Neighbor LUTs (same construction as generate_blocky_mesh) for visibility
+	// and AO. Duplicated so this pass stands alone.
+	VoxelFixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut;
+	side_neighbor_lut[Cube::SIDE_LEFT] = row_size;
+	side_neighbor_lut[Cube::SIDE_RIGHT] = -row_size;
+	side_neighbor_lut[Cube::SIDE_BACK] = -deck_size;
+	side_neighbor_lut[Cube::SIDE_FRONT] = deck_size;
+	side_neighbor_lut[Cube::SIDE_BOTTOM] = -1;
+	side_neighbor_lut[Cube::SIDE_TOP] = 1;
+	VoxelFixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut;
+	edge_neighbor_lut[Cube::EDGE_BOTTOM_BACK] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_BACK];
+	edge_neighbor_lut[Cube::EDGE_BOTTOM_FRONT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_FRONT];
+	edge_neighbor_lut[Cube::EDGE_BOTTOM_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_LEFT];
+	edge_neighbor_lut[Cube::EDGE_BOTTOM_RIGHT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	edge_neighbor_lut[Cube::EDGE_BACK_LEFT] = side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
+	edge_neighbor_lut[Cube::EDGE_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	edge_neighbor_lut[Cube::EDGE_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
+	edge_neighbor_lut[Cube::EDGE_FRONT_RIGHT] = side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	edge_neighbor_lut[Cube::EDGE_TOP_BACK] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_BACK];
+	edge_neighbor_lut[Cube::EDGE_TOP_FRONT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_FRONT];
+	edge_neighbor_lut[Cube::EDGE_TOP_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_LEFT];
+	edge_neighbor_lut[Cube::EDGE_TOP_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	VoxelFixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut;
+	corner_neighbor_lut[Cube::CORNER_BOTTOM_BACK_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
+	corner_neighbor_lut[Cube::CORNER_BOTTOM_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	corner_neighbor_lut[Cube::CORNER_BOTTOM_FRONT_RIGHT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	corner_neighbor_lut[Cube::CORNER_BOTTOM_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
+	corner_neighbor_lut[Cube::CORNER_TOP_BACK_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
+	corner_neighbor_lut[Cube::CORNER_TOP_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	corner_neighbor_lut[Cube::CORNER_TOP_FRONT_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
+	corner_neighbor_lut[Cube::CORNER_TOP_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
+
+	const int mn[3] = { (int)VoxelMesherBlocky::PADDING, (int)VoxelMesherBlocky::PADDING, (int)VoxelMesherBlocky::PADDING };
+	const int mx[3] = { block_size.x - (int)VoxelMesherBlocky::PADDING,
+		block_size.y - (int)VoxelMesherBlocky::PADDING, block_size.z - (int)VoxelMesherBlocky::PADDING };
+
+	// side -> (normal axis, in-plane axes u, v)
+	struct SideAxes { int side; int na; int ua; int va; };
+	static const SideAxes SIDES[6] = {
+		{ Cube::SIDE_LEFT, 0, 1, 2 }, { Cube::SIDE_RIGHT, 0, 1, 2 },
+		{ Cube::SIDE_BOTTOM, 1, 0, 2 }, { Cube::SIDE_TOP, 1, 0, 2 },
+		{ Cube::SIDE_BACK, 2, 0, 1 }, { Cube::SIDE_FRONT, 2, 0, 1 }
+	};
+
+	std::vector<int> mask;
+	for (int s = 0; s < 6; ++s) {
+		const int side = SIDES[s].side;
+		if (cull_down_faces && side == Cube::SIDE_NEGATIVE_Y) {
+			continue;
+		}
+		const int na = SIDES[s].na, ua = SIDES[s].ua, va = SIDES[s].va;
+		const int W = mx[ua] - mn[ua];
+		const int H = mx[va] - mn[va];
+		if (W <= 0 || H <= 0) {
+			continue;
+		}
+		mask.assign((size_t)W * H, 0);
+		for (int nc = mn[na]; nc < mx[na]; ++nc) {
+			for (int vv = 0; vv < H; ++vv) {
+				for (int uu = 0; uu < W; ++uu) {
+					const int idx = nc * stride[na] + (mn[ua] + uu) * stride[ua] + (mn[va] + vv) * stride[va];
+					int key = 0;
+					const int shade = mb_greedy_face(type_buffer, idx, side, library, bake_occlusion,
+							side_neighbor_lut, edge_neighbor_lut, corner_neighbor_lut);
+					if (shade >= 0) {
+						// key packs voxel id (>=1) and shade (0..3) so only faces
+						// with identical colour AND shade merge. Never 0 for a real
+						// voxel, so 0 cleanly marks an ineligible cell.
+						key = (type_buffer[idx] << 2) | shade;
+					}
+					mask[uu + vv * W] = key;
+				}
+			}
+			for (int j = 0; j < H; ++j) {
+				for (int i = 0; i < W;) {
+					const int key = mask[i + j * W];
+					if (key == 0) {
+						++i;
+						continue;
+					}
+					int w = 1;
+					while (i + w < W && mask[(i + w) + j * W] == key) {
+						++w;
+					}
+					int hh = 1;
+					bool stop = false;
+					while (j + hh < H && !stop) {
+						for (int k = 0; k < w; ++k) {
+							if (mask[(i + k) + (j + hh) * W] != key) {
+								stop = true;
+								break;
+							}
+						}
+						if (!stop) {
+							++hh;
+						}
+					}
+					mb_emit_rect(out_arrays_per_material, library, key >> 2, side, na, ua, va,
+							nc, mn[ua] + i, mn[va] + j, w, hh, key & 3, baked_occlusion_darkness);
+					for (int b = 0; b < hh; ++b) {
+						for (int a = 0; a < w; ++a) {
+							mask[(i + a) + (j + b) * W] = 0;
+						}
+					}
+					i += w;
+				}
+			}
+		}
+	}
+}
+
+
 template <typename Type_T>
 static void generate_blocky_mesh(
 		VoxelFixedArray<VoxelMesherBlocky::Arrays, VoxelMesherBlocky::MAX_MATERIALS> &out_arrays_per_material,
 		const Span<Type_T> type_buffer,
 		const Vector3i block_size,
 		const VoxelLibrary::BakedData &library,
-		bool bake_occlusion, float baked_occlusion_darkness, bool cull_down_faces) {
+		bool bake_occlusion, float baked_occlusion_darkness, bool cull_down_faces, bool greedy) {
 	ERR_FAIL_COND(block_size.x < static_cast<int>(2 * VoxelMesherBlocky::PADDING) ||
 				  block_size.y < static_cast<int>(2 * VoxelMesherBlocky::PADDING) ||
 				  block_size.z < static_cast<int>(2 * VoxelMesherBlocky::PADDING));
@@ -206,6 +461,23 @@ static void generate_blocky_mesh(
 										++shaded_corner[corner];
 									}
 								}
+							}
+						}
+
+						// The greedy pass emits uniformly-shaded cube faces as merged
+						// rectangles; skip them here so they aren't drawn twice. Must
+						// match mb_greedy_face exactly (same uniform-shade test).
+						if (greedy && voxel.model.positions.size() == 0 && side_positions.size() == 4) {
+							bool uniform = true;
+							const int s0 = shaded_corner[Cube::g_side_corners[side][0]];
+							for (unsigned int j = 1; j < 4; ++j) {
+								if (shaded_corner[Cube::g_side_corners[side][j]] != s0) {
+									uniform = false;
+									break;
+								}
+							}
+							if (uniform) {
+								continue;
 							}
 						}
 
@@ -477,13 +749,25 @@ void VoxelMesherBlocky::build(VoxelMesher::Output &output, const VoxelMesher::In
 
 		switch (channel_depth) {
 			case VoxelBufferInternal::DEPTH_8_BIT:
+				if (input.greedy) {
+					generate_blocky_greedy_pass(cache.arrays_per_material, raw_channel,
+							block_size, library_baked_data, params.bake_occlusion,
+							baked_occlusion_darkness, input.cull_down_faces);
+				}
 				generate_blocky_mesh(cache.arrays_per_material, raw_channel,
-						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness, input.cull_down_faces);
+						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness,
+						input.cull_down_faces, input.greedy);
 				break;
 
 			case VoxelBufferInternal::DEPTH_16_BIT:
+				if (input.greedy) {
+					generate_blocky_greedy_pass(cache.arrays_per_material, raw_channel.reinterpret_cast_to<uint16_t>(),
+							block_size, library_baked_data, params.bake_occlusion,
+							baked_occlusion_darkness, input.cull_down_faces);
+				}
 				generate_blocky_mesh(cache.arrays_per_material, raw_channel.reinterpret_cast_to<uint16_t>(),
-						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness, input.cull_down_faces);
+						block_size, library_baked_data, params.bake_occlusion, baked_occlusion_darkness,
+						input.cull_down_faces, input.greedy);
 				break;
 
 			default:

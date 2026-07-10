@@ -17,6 +17,9 @@ public:
 		// Skip downward faces entirely (sheet-like builds: an ocean slab's
 		// underside is never visible but costs ~a third of its geometry).
 		bool cull_down_faces = false;
+		// Greedy-mesh coplanar, same-voxel, uniformly-shaded cube faces into
+		// merged rectangles (blocky mesher only).
+		bool greedy = false;
 	};
 
 	struct Output {
