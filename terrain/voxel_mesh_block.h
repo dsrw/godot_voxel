@@ -8,6 +8,7 @@
 #include "../util/fixed_array.h"
 
 class Spatial;
+class Shape;
 
 // Stores mesh and collider for one chunk of the rendered volume.
 // It doesn't store voxel data, because it may be using different block size, or different data structure.
@@ -33,6 +34,10 @@ public:
 	VoxelRefCount mesh_viewers;
 	VoxelRefCount collision_viewers;
 	bool got_first_mesh_update = false;
+	// Display is owned by a directly-assigned mesh (set_block_mesh — animation
+	// frame flips). Pipeline results landing while set must not stomp it; a
+	// data-driven remesh (post_edit_area) reclaims ownership.
+	bool direct_mesh = false;
 
 	uint32_t last_collider_update_time = 0;
 	bool has_deferred_collider_update = false;
@@ -68,6 +73,12 @@ public:
 	// Collisions
 
 	void set_collision_mesh(Vector<Array> surface_arrays, bool debug_collision, Spatial *node, float margin);
+	// Install a pre-built shape (frame meshes bake it once and share it across
+	// chunks, so no per-install shape build or render-thread array fetch).
+	void set_collision_shape(Ref<Shape> shape, bool debug_collision, Spatial *node);
+	inline bool has_collision() const {
+		return _static_body.is_valid();
+	}
 	void set_collision_layer(int layer);
 	void set_collision_mask(int mask);
 	void set_collision_margin(float margin);

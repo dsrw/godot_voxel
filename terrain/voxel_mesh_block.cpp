@@ -288,6 +288,30 @@ void VoxelMeshBlock::set_collision_mesh(Vector<Array> surface_arrays, bool debug
 	_static_body.set_shape_enabled(0, _visible);
 }
 
+void VoxelMeshBlock::set_collision_shape(Ref<Shape> shape, bool debug_collision, Spatial *node) {
+	// Like set_collision_mesh but with the shape already built (frame meshes bake
+	// it once and share it). The shape's margin is set at build time.
+	if (shape.is_null()) {
+		drop_collision();
+		return;
+	}
+
+	ERR_FAIL_COND(node == nullptr);
+	ERR_FAIL_COND_MSG(node->get_world() != _world, "Physics body and attached node must be from the same world");
+
+	if (!_static_body.is_valid()) {
+		_static_body.create();
+		_static_body.set_world(*_world);
+		_static_body.set_attached_object(node);
+	} else {
+		_static_body.remove_shape(0);
+	}
+
+	_static_body.add_shape(shape);
+	_static_body.set_debug(debug_collision, *_world);
+	_static_body.set_shape_enabled(0, _visible);
+}
+
 void VoxelMeshBlock::set_collision_layer(int layer) {
 	if (_static_body.is_valid()) {
 		_static_body.set_collision_layer(layer);

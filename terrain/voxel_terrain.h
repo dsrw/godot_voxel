@@ -91,7 +91,9 @@ public:
 	// Assign a block's render mesh directly (e.g. a cached animation-frame
 	// mesh), bypassing the meshing pipeline. The block is marked up to date
 	// so the display sticks until voxel data changes schedule a rebuild.
-	void set_block_mesh(Vector3 bpos, Ref<Mesh> mesh);
+	// Returns false when the chunk has no mesh block yet (viewer pairing lags
+	// data streaming during load) — the caller should retry on a later flip.
+	bool set_block_mesh(Vector3 bpos, Ref<Mesh> mesh);
 
 	// Overwrite one data block's TYPE channel from packed u16 LE values in
 	// x-major (x, then y, then z) order. With remesh, the edit schedules

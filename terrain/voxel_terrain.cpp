@@ -1,4 +1,5 @@
 #include "voxel_terrain.h"
+#include <scene/resources/concave_polygon_shape.h>
 #include "../constants/voxel_constants.h"
 #include "../constants/voxel_string_names.h"
 #include "../edition/voxel_tool_terrain.h"
@@ -674,6 +675,10 @@ void VoxelTerrain::try_schedule_mesh_update_from_data(const Box3i &box_in_voxels
 		// There isn't necessarily a mesh block, if the edit happens in a boundary,
 		// or if it is done next to a viewer that doesn't need meshes
 		if (block != nullptr) {
+			// A data-driven remesh reclaims the display from a directly-assigned
+			// mesh (set_block_mesh) — the caller changed the voxels and wants
+			// them shown.
+			block->direct_mesh = false;
 			try_schedule_mesh_update(block);
 		}
 	});
@@ -1246,12 +1251,14 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		}
 		Ref<ArrayMesh> mesh;
 		mesh.instance();
+		Vector<Array> collidable_surfaces;
 		int surface_index = 0;
 		for (int i = 0; i < ob.surfaces.surfaces.size(); ++i) {
 			Array surface = ob.surfaces.surfaces[i];
 			if (surface.empty() || !is_surface_triangulated(surface)) {
 				continue;
 			}
+			collidable_surfaces.push_back(surface);
 			mesh->add_surface_from_arrays(
 					ob.surfaces.primitive_type, surface, Array(), ob.surfaces.compression_flags);
 			mesh->surface_set_material(surface_index, _materials[i]);
@@ -1260,6 +1267,17 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		Ref<Mesh> result;
 		if (surface_index > 0) {
 			result = mesh;
+			// Build the collision shape from the raw arrays now (they're in hand,
+			// no VisualServer round-trip) and stash it on the mesh. This mesh is
+			// cached and re-installed on many chunks via set_block_mesh; carrying
+			// the shape means it's built once and shared, never per-install.
+			if (_generate_collisions) {
+				Ref<Shape> shape = create_concave_polygon_shape(collidable_surfaces);
+				if (shape.is_valid()) {
+					shape->set_margin(_collision_margin);
+					mesh->set_meta("col_shape", shape);
+				}
+			}
 		}
 		emit_signal(VoxelStringNames::get_singleton()->frame_mesh_baked,
 				ob.position.to_vec3(), ob.tag, result);
@@ -1275,6 +1293,38 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		// (try_schedule sets MESH_UPDATE_NOT_SENT and queues it; presetting
 		// the state here would make it bail as "already queued")
 		try_schedule_mesh_update(block);
+		++_stats.dropped_block_meshs;
+		return;
+	}
+
+	if (block->direct_mesh) {
+		// A directly-assigned display (animation frame mesh) owns this block. A
+		// pipeline result racing in behind it — scheduled by viewer pairing, or
+		// sent before the direct assign — must not stomp it: during frame
+		// playback the block's data is often empty (live paint is skipped), so
+		// the stomp would blank the chunk, and a static chunk never re-commits
+		// (one content key) — the missing-island-interiors-on-reload bug.
+		// Data-driven edits reclaim ownership (try_schedule_mesh_update_from_data).
+		block->set_mesh_state(VoxelMeshBlock::MESH_UP_TO_DATE);
+		// The dropped remesh may have been carrying collision duty — a
+		// collision viewer can pair after the direct mesh was assigned (walk
+		// toward a distant animated build). Install the direct mesh's baked
+		// shape in its place.
+		const bool want_collision = _generate_collisions && block->collision_viewers.get() > 0;
+		if (want_collision && !block->has_collision()) {
+			Ref<Mesh> dmesh = block->get_mesh();
+			Ref<Shape> shape;
+			if (dmesh.is_valid() && dmesh->has_meta("col_shape")) {
+				shape = dmesh->get_meta("col_shape");
+			}
+			if (shape.is_valid()) {
+				block->set_collision_shape(shape, get_tree()->is_debugging_collisions_hint(), this);
+				block->set_collision_layer(_collision_layer);
+				block->set_collision_mask(_collision_mask);
+				// Position the freshly-created body (see set_block_mesh).
+				block->set_parent_transform(get_global_transform());
+			}
+		}
 		++_stats.dropped_block_meshs;
 		return;
 	}
@@ -1406,16 +1456,46 @@ void VoxelTerrain::set_cull_down_faces(bool enabled) {
 	remesh_all_blocks();
 }
 
-void VoxelTerrain::set_block_mesh(Vector3 bpos, Ref<Mesh> mesh) {
+bool VoxelTerrain::set_block_mesh(Vector3 bpos, Ref<Mesh> mesh) {
 	VoxelMeshBlock *block = _mesh_map.get_block(Vector3i::from_floored(bpos));
 	if (block == nullptr) {
-		return;
+		// No mesh block yet (viewer pairing lags data streaming during a load
+		// storm). Report it so the caller can retry once the block exists —
+		// a silent no-op here left chunks marked displayed-but-blank forever.
+		return false;
 	}
 	block->set_mesh(mesh);
 	block->set_mesh_state(VoxelMeshBlock::MESH_UP_TO_DATE);
+	block->direct_mesh = true;
 	block->set_visible(true);
 	block->set_parent_visible(is_visible());
 	block->set_parent_transform(get_global_transform());
+
+	// Directly-installed meshes (animation frame flips) never pass through
+	// apply_mesh_update, so without this they'd have no collision — an animated
+	// build (e.g. a saved sea, whose geometry is frame-only) would be
+	// walk-through. The shape was built once at bake time and stashed on the
+	// mesh (see the frame_bake branch), so installing it here is just a pointer
+	// assign — no per-install shape build, no surface_get_arrays render sync.
+	const bool gen_collisions = _generate_collisions && block->collision_viewers.get() > 0;
+	if (!gen_collisions) {
+		return true;
+	}
+	Ref<Shape> shape;
+	if (mesh.is_valid() && mesh->has_meta("col_shape")) {
+		shape = mesh->get_meta("col_shape");
+	}
+	block->set_collision_shape(shape, get_tree()->is_debugging_collisions_hint(), this);
+	if (shape.is_valid()) {
+		block->set_collision_layer(_collision_layer);
+		block->set_collision_mask(_collision_mask);
+		// A freshly-created static body only gets its world position from
+		// set_parent_transform, which acts on VALID bodies — the call above
+		// (before the install) missed it. Re-apply, like the normal path does
+		// after set_collision_mesh (apply_mesh_update tail).
+		block->set_parent_transform(get_global_transform());
+	}
+	return true;
 }
 
 bool VoxelTerrain::set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool remesh) {
