@@ -1277,6 +1277,10 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 				continue;
 			}
 			collidable_surfaces.push_back(surface);
+			if (_materials[i].is_null()) {
+				// Collision-only surface (invisible voxels): collide, never draw.
+				continue;
+			}
 			mesh->add_surface_from_arrays(
 					ob.surfaces.primitive_type, surface, Array(), ob.surfaces.compression_flags);
 			mesh->surface_set_material(surface_index, _materials[i]);
@@ -1379,6 +1383,13 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		}
 
 		collidable_surfaces.push_back(surface);
+
+		if (_materials[i].is_null()) {
+			// A meshed surface with no assigned material contributes collision but
+			// is never drawn — invisible-but-collidable voxels (invisible walls).
+			// Keeping it out of the visual mesh means no draw call and no overdraw.
+			continue;
+		}
 
 		mesh->add_surface_from_arrays(
 				ob.surfaces.primitive_type, surface, Array(), ob.surfaces.compression_flags);
