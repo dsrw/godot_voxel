@@ -27,10 +27,13 @@ const int g_opposite_side[6] = {
 inline bool is_face_visible(const VoxelLibrary::BakedData &lib, const Voxel::BakedData &vt, uint32_t other_voxel_id, int side) {
 	if (other_voxel_id < lib.models.size()) {
 		const Voxel::BakedData &other_vt = lib.models[other_voxel_id];
-		// `!occludes_neighbors`: the neighbour renders as air for culling
-		// purposes (invisible-but-collidable voxels), so vt still meshes this
-		// face — no hole where a solid block meets an invisible one.
-		if (other_vt.empty || !other_vt.occludes_neighbors ||
+		// A non-occluding neighbour (invisible-but-collidable voxel) is treated as
+		// air, but only for an *occluding* vt: a solid block still meshes its face
+		// toward it (no hole at the seam). Between two non-occluding voxels the
+		// shared face falls through to the transparency rule and is culled like
+		// any interior face — otherwise a stack of them would mesh interior
+		// horizontal faces and act like climbable ledges.
+		if (other_vt.empty || (!other_vt.occludes_neighbors && vt.occludes_neighbors) ||
 				(other_vt.transparency_index > vt.transparency_index)) {
 			return true;
 		} else {
