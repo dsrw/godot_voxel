@@ -101,6 +101,11 @@ public:
 	// callers pairing it with set_block_mesh already have the display.
 	bool set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool remesh);
 
+	// Enu prefill: publish the static-palette-index → engine voxel slot
+	// snapshot the streaming thread resolves paged-in chunks with. Rebuilt fresh
+	// each call (atomic replace); in-flight requests keep the snapshot they took.
+	void set_enu_palette_slots(PoolIntArray slots);
+
 	Array get_debug_paired_viewers();
 
 	VoxelDataMap &get_storage() { return _data_map; }
@@ -250,6 +255,11 @@ private:
 	Ref<VoxelStream> _stream;
 	Ref<VoxelMesher> _mesher;
 	Ref<VoxelGenerator> _generator;
+
+	// Enu prefill palette snapshot (see set_enu_palette_slots). Read on
+	// main when issuing load requests; the shared_ptr is copied onto each request
+	// so the streaming thread reads an immutable snapshot without a lock.
+	std::shared_ptr<std::vector<uint16_t>> _enu_palette_slots;
 
 	bool _generate_collisions = true;
 	float _viewer_distance_scale = 1.f;

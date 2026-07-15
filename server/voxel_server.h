@@ -141,7 +141,13 @@ public:
 	void request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
 			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy);
 	// TODO Add parameter to skip stream loading
-	void request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances);
+	// Enu: `enu_chunk` (raw compressed snapshot bytes for this block, supplied by
+	// the receiver on the main thread) and `palette_slots` (static-palette-index →
+	// engine voxel slot snapshot) turn a load into a prefill expand on the
+	// streaming thread. Empty `enu_chunk` → today's stream/generator path.
+	void request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances,
+			std::vector<uint8_t> enu_chunk = std::vector<uint8_t>(),
+			std::shared_ptr<std::vector<uint16_t>> palette_slots = nullptr);
 	void request_block_generate(uint32_t volume_id, Vector3i block_pos, int lod,
 			std::shared_ptr<VoxelAsyncDependencyTracker> tracker);
 	void request_all_stream_blocks(uint32_t volume_id);
@@ -316,6 +322,12 @@ private:
 
 		std::shared_ptr<VoxelBufferInternal> voxels;
 		std::unique_ptr<VoxelInstanceBlockData> instances;
+		// Enu prefill: raw compressed snapshot bytes for this block (copied
+		// out of the receiver's memory on main) and the palette→slot resolution
+		// snapshot to expand them with. Non-empty `enu_chunk` makes `run()` decode
+		// + resolve into `voxels` and skip the stream. See voxel-stream-loading.md.
+		std::vector<uint8_t> enu_chunk;
+		std::shared_ptr<std::vector<uint16_t>> enu_palette_slots;
 		Vector3i position; // In data blocks of the specified lod
 		uint32_t volume_id;
 		uint8_t lod;

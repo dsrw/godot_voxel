@@ -773,10 +773,28 @@ void VoxelTerrain::send_block_data_requests() {
 	VOXEL_PROFILE_SCOPE();
 
 	// Blocks to load
+	const bool has_enu_hook = has_method("enu_chunk_bytes");
 	for (size_t i = 0; i < _blocks_pending_load.size(); ++i) {
 		const Vector3i block_pos = _blocks_pending_load[i];
 		// TODO Batch request
-		VoxelServer::get_singleton()->request_block_load(_volume_id, block_pos, 0, false);
+		// Enu prefill: ask the receiver (main, Ed-safe) for this block's real
+		// bytes. Non-empty → the streaming thread expands them so the block is
+		// prefilled; empty (not resident) → today's empty-block path.
+		std::vector<uint8_t> enu_chunk;
+		if (has_enu_hook) {
+			const Variant ret = call("enu_chunk_bytes", block_pos.to_vec3());
+			if (ret.get_type() == Variant::POOL_BYTE_ARRAY) {
+				const PoolByteArray bytes = ret;
+				const int n = bytes.size();
+				if (n > 0) {
+					enu_chunk.resize(n);
+					PoolByteArray::Read r = bytes.read();
+					memcpy(enu_chunk.data(), r.ptr(), n);
+				}
+			}
+		}
+		VoxelServer::get_singleton()->request_block_load(
+				_volume_id, block_pos, 0, false, std::move(enu_chunk), _enu_palette_slots);
 	}
 
 	// Blocks to save
@@ -1529,6 +1547,19 @@ bool VoxelTerrain::set_block_voxel_data(Vector3 bpos, PoolByteArray values, bool
 	return true;
 }
 
+void VoxelTerrain::set_enu_palette_slots(PoolIntArray slots) {
+	auto snapshot = std::make_shared<std::vector<uint16_t>>();
+	const int n = slots.size();
+	snapshot->resize(n);
+	PoolIntArray::Read r = slots.read();
+	for (int i = 0; i < n; ++i) {
+		snapshot->at(i) = uint16_t(r[i]);
+	}
+	// Atomic replace: in-flight load requests keep the shared_ptr they copied, so
+	// the streaming thread never sees a half-updated vector.
+	_enu_palette_slots = std::move(snapshot);
+}
+
 Ref<VoxelTool> VoxelTerrain::get_voxel_tool() {
 	Ref<VoxelTool> vt = memnew(VoxelToolTerrain(this));
 	const int used_channels_mask = get_used_channels_mask();
@@ -1628,6 +1659,7 @@ void VoxelTerrain::_bind_methods() {
 			&VoxelTerrain::set_block_mesh);
 	ClassDB::bind_method(D_METHOD("set_block_voxel_data", "block_position", "values", "remesh"),
 			&VoxelTerrain::set_block_voxel_data);
+	ClassDB::bind_method(D_METHOD("set_enu_palette_slots", "slots"), &VoxelTerrain::set_enu_palette_slots);
 	ClassDB::bind_method(D_METHOD("get_debug_paired_viewers"), &VoxelTerrain::get_debug_paired_viewers);
 	ClassDB::bind_method(D_METHOD("set_viewer_distance_scale", "scale"),
 			&VoxelTerrain::set_viewer_distance_scale);

@@ -391,10 +391,32 @@ void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_p
 	_general_thread_pool.enqueue(r);
 }
 
-void VoxelServer::request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances) {
+void VoxelServer::request_block_load(uint32_t volume_id, Vector3i block_pos, int lod, bool request_instances,
+		std::vector<uint8_t> enu_chunk, std::shared_ptr<std::vector<uint16_t>> palette_slots) {
 	const Volume &volume = _world.volumes.get(volume_id);
 	ERR_FAIL_COND(volume.stream_dependency == nullptr);
 	ERR_FAIL_COND(volume.data_block_size > 255);
+
+	// Enu prefill: the receiver handed us this block's real bytes. Expand
+	// them on the streaming thread instead of streaming/generating an empty block.
+	// (`run()` short-circuits before touching the stream when `enu_chunk` is set.)
+	if (!enu_chunk.empty()) {
+		BlockDataRequest *r = memnew(BlockDataRequest);
+		r->volume_id = volume_id;
+		r->position = block_pos;
+		r->lod = lod;
+		r->type = BlockDataRequest::TYPE_LOAD;
+		r->block_size = volume.data_block_size;
+		r->stream_dependency = volume.stream_dependency;
+		r->request_instances = request_instances;
+		r->enu_chunk = std::move(enu_chunk);
+		r->enu_palette_slots = std::move(palette_slots);
+
+		init_priority_dependency(r->priority_dependency, block_pos, lod, volume, volume.data_block_size);
+
+		_streaming_thread_pool.enqueue(r);
+		return;
+	}
 
 	if (volume.stream_dependency->stream.is_valid()) {
 		BlockDataRequest *r = memnew(BlockDataRequest);
@@ -751,10 +773,232 @@ VoxelServer::BlockDataRequest::~BlockDataRequest() {
 	--g_debug_stream_tasks_count;
 }
 
+namespace {
+
+// Enu prefill chunk expansion. These decoders mirror the wire format in
+// `src/models/voxels/codec.nim` (the source of truth) so the streaming thread can
+// turn a chunk's raw compressed snapshot bytes into resolved engine voxel ids
+// without touching Nim. Only the snapshot formats `encode_chunk` can emit are
+// handled (empty / RLE8 / RLE16 / sparse-full 8+16); deltas stay on Enu's main
+// paint path. A parity test guards against drift (see test_voxel_codec.nim).
+
+enum EnuChunkFormat {
+	ENU_FMT_RLE = 0x00, // legacy 8-bit
+	ENU_FMT_SPARSE_FULL = 0x01, // legacy 8-bit
+	ENU_FMT_EMPTY = 0x03,
+	ENU_FMT_RLE16 = 0x04,
+	ENU_FMT_SPARSE_FULL16 = 0x05,
+};
+
+const int ENU_CHUNK_DIM = 16;
+const int ENU_CHUNK_VOLUME = ENU_CHUNK_DIM * ENU_CHUNK_DIM * ENU_CHUNK_DIM; // 4096
+const uint32_t ENU_STATIC_COLOR_BASE = 64;
+const uint8_t ENU_CMD_REPEAT = 241; // legacy 8-bit RLE escape
+
+// SQLite-style varint (Nim std/varints readVu64), reading from a zero-padded
+// 9-byte window so a truncated tail decodes like Nim's fixed-size buffer.
+inline uint64_t enu_read_varint(const uint8_t *data, size_t len, size_t &i) {
+	uint8_t z[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	const size_t avail = (i < len) ? (len - i) : 0;
+	for (size_t j = 0; j < 9 && j < avail; ++j) {
+		z[j] = data[i + j];
+	}
+	uint64_t r = 0;
+	int used;
+	if (z[0] <= 240) {
+		r = z[0];
+		used = 1;
+	} else if (z[0] <= 248) {
+		r = (uint64_t(z[0]) - 241) * 256 + uint64_t(z[1]) + 240;
+		used = 2;
+	} else if (z[0] == 249) {
+		r = 2288u + 256u * uint64_t(z[1]) + uint64_t(z[2]);
+		used = 3;
+	} else if (z[0] == 250) {
+		r = (uint64_t(z[1]) << 16) + (uint64_t(z[2]) << 8) + uint64_t(z[3]);
+		used = 4;
+	} else {
+		const uint64_t x = (uint64_t(z[1]) << 24) + (uint64_t(z[2]) << 16) +
+				(uint64_t(z[3]) << 8) + uint64_t(z[4]);
+		if (z[0] == 251) {
+			r = x;
+			used = 5;
+		} else if (z[0] == 252) {
+			r = (x << 8) + uint64_t(z[5]);
+			used = 6;
+		} else if (z[0] == 253) {
+			r = (x << 16) + (uint64_t(z[5]) << 8) + uint64_t(z[6]);
+			used = 7;
+		} else if (z[0] == 254) {
+			r = (x << 24) + (uint64_t(z[5]) << 16) + (uint64_t(z[6]) << 8) + uint64_t(z[7]);
+			used = 8;
+		} else {
+			r = (x << 32) + (0xffffffffu & ((uint64_t(z[5]) << 24) +
+					(uint64_t(z[6]) << 16) + (uint64_t(z[7]) << 8) + uint64_t(z[8])));
+			used = 9;
+		}
+	}
+	i += used;
+	return r;
+}
+
+inline uint16_t enu_read_u16(const uint8_t *data, size_t &i) {
+	const uint16_t v = uint16_t(data[i]) | (uint16_t(data[i + 1]) << 8);
+	i += 2;
+	return v;
+}
+
+// Decode `data` into `cells` (4096 packed voxels, linear order z + y*16 + x*256).
+// `cells` must be pre-zeroed (air).
+void enu_decode_chunk(const uint8_t *data, size_t len, uint16_t *cells) {
+	if (len == 0) {
+		return;
+	}
+	const uint8_t format = data[0];
+	switch (format) {
+		case ENU_FMT_EMPTY:
+			break;
+
+		case ENU_FMT_RLE: {
+			int out_idx = 0;
+			size_t i = 1;
+			while (i < len && out_idx < ENU_CHUNK_VOLUME) {
+				const uint8_t b = data[i];
+				if (b == ENU_CMD_REPEAT) {
+					if (i + 2 >= len) {
+						break;
+					}
+					const int count = int(data[i + 1]) + 3;
+					const uint16_t value = data[i + 2];
+					for (int k = 0; k < count && out_idx < ENU_CHUNK_VOLUME; ++k) {
+						cells[out_idx++] = value;
+					}
+					i += 3;
+				} else {
+					cells[out_idx++] = b;
+					++i;
+				}
+			}
+		} break;
+
+		case ENU_FMT_RLE16: {
+			int out_idx = 0;
+			size_t i = 1;
+			while (i < len && out_idx < ENU_CHUNK_VOLUME) {
+				const uint8_t tag = data[i];
+				++i;
+				const int count = int(enu_read_varint(data, len, i));
+				if (tag == 1) {
+					if (i + 1 >= len) {
+						break;
+					}
+					const uint16_t value = enu_read_u16(data, i);
+					for (int k = 0; k < count && out_idx < ENU_CHUNK_VOLUME; ++k) {
+						cells[out_idx++] = value;
+					}
+				} else {
+					for (int k = 0; k < count; ++k) {
+						if (i + 1 >= len || out_idx >= ENU_CHUNK_VOLUME) {
+							break;
+						}
+						cells[out_idx++] = enu_read_u16(data, i);
+					}
+				}
+			}
+		} break;
+
+		case ENU_FMT_SPARSE_FULL:
+		case ENU_FMT_SPARSE_FULL16: {
+			const bool wide = (format == ENU_FMT_SPARSE_FULL16);
+			size_t i = 1;
+			const int count = int(enu_read_varint(data, len, i));
+			for (int k = 0; k < count; ++k) {
+				const uint64_t pos = enu_read_varint(data, len, i);
+				if (wide) {
+					if (i + 1 >= len) {
+						break;
+					}
+					const uint16_t voxel = enu_read_u16(data, i);
+					if (pos < uint64_t(ENU_CHUNK_VOLUME)) {
+						cells[pos] = voxel;
+					}
+				} else {
+					if (i >= len) {
+						break;
+					}
+					const uint16_t voxel = data[i];
+					++i;
+					if (pos < uint64_t(ENU_CHUNK_VOLUME)) {
+						cells[pos] = voxel;
+					}
+				}
+			}
+		} break;
+
+		default:
+			ERR_PRINT(String("Unknown enu chunk format {0}").format(varray(int(format))));
+			break;
+	}
+}
+
+// A packed color index resolves to an engine voxel slot: named colors are
+// identity (they are their own library slots), static-RGB colors index the
+// per-build palette snapshot. Mirrors `renderer.nim` `library_slot`.
+inline uint64_t enu_resolve_slot(uint16_t packed, const std::vector<uint16_t> *palette_slots) {
+	if (packed == 0) {
+		return 0;
+	}
+	const uint32_t c = (uint32_t(packed) - 1) / 3;
+	if (c < ENU_STATIC_COLOR_BASE) {
+		return c;
+	}
+	const uint32_t pi = c - ENU_STATIC_COLOR_BASE;
+	if (palette_slots != nullptr && pi < palette_slots->size()) {
+		return (*palette_slots)[pi];
+	}
+	return 5; // WHITE ordinal — visible fallback for an un-synced palette entry
+}
+
+void enu_expand_chunk(VoxelBufferInternal &vb, const std::vector<uint8_t> &data,
+		const std::vector<uint16_t> *palette_slots) {
+	uint16_t cells[ENU_CHUNK_VOLUME] = { 0 };
+	enu_decode_chunk(data.data(), data.size(), cells);
+
+	// Air stays uniform; only non-empty cells de-uniform the channel — matches a
+	// normally-generated block's memory profile.
+	vb.fill(0, VoxelBufferInternal::CHANNEL_TYPE);
+	for (int x = 0; x < ENU_CHUNK_DIM; ++x) {
+		for (int y = 0; y < ENU_CHUNK_DIM; ++y) {
+			for (int z = 0; z < ENU_CHUNK_DIM; ++z) {
+				const uint16_t packed = cells[z + y * ENU_CHUNK_DIM + x * ENU_CHUNK_DIM * ENU_CHUNK_DIM];
+				if (packed != 0) {
+					vb.set_voxel(enu_resolve_slot(packed, palette_slots), x, y, z,
+							VoxelBufferInternal::CHANNEL_TYPE);
+				}
+			}
+		}
+	}
+}
+
+} // namespace
+
 void VoxelServer::BlockDataRequest::run(VoxelTaskContext ctx) {
 	VOXEL_PROFILE_SCOPE();
 
 	CRASH_COND(stream_dependency == nullptr);
+
+	// Enu prefill: the receiver supplied this block's real bytes on main.
+	// Expand them into the buffer and skip the stream entirely (the volume may
+	// have no stream at all — Enu drives loads through a flat generator).
+	if (type == TYPE_LOAD && !enu_chunk.empty()) {
+		ERR_FAIL_COND(voxels != nullptr);
+		voxels = gd_make_shared<VoxelBufferInternal>();
+		voxels->create(block_size, block_size, block_size);
+		enu_expand_chunk(*voxels, enu_chunk, enu_palette_slots.get());
+		has_run = true;
+		return;
+	}
+
 	Ref<VoxelStream> stream = stream_dependency->stream;
 	CRASH_COND(stream.is_null());
 
