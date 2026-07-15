@@ -113,6 +113,10 @@ void Voxel::set_transparency_index(int i) {
 	_transparency_index = clamp(i, 0, 255);
 }
 
+void Voxel::set_occludes_neighbors(bool occludes) {
+	_occludes_neighbors = occludes;
+}
+
 void Voxel::set_geometry_type(GeometryType type) {
 	if (type == _geometry_type) {
 		return;
@@ -453,6 +457,7 @@ void Voxel::bake(BakedData &baked_data, int p_atlas_size, bool bake_tangents) {
 
 	// baked_data.contributes_to_ao is set by the side culling phase
 	baked_data.transparency_index = _transparency_index;
+	baked_data.occludes_neighbors = _occludes_neighbors;
 	baked_data.material_id = _material_id;
 	baked_data.color = _color;
 
@@ -492,6 +497,8 @@ void Voxel::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_transparency_index", "transparency_index"), &Voxel::set_transparency_index);
 	ClassDB::bind_method(D_METHOD("get_transparency_index"), &Voxel::get_transparency_index);
+	ClassDB::bind_method(D_METHOD("set_occludes_neighbors", "occludes"), &Voxel::set_occludes_neighbors);
+	ClassDB::bind_method(D_METHOD("get_occludes_neighbors"), &Voxel::get_occludes_neighbors);
 
 	ClassDB::bind_method(D_METHOD("set_random_tickable", "rt"), &Voxel::set_random_tickable);
 	ClassDB::bind_method(D_METHOD("is_random_tickable"), &Voxel::is_random_tickable);
@@ -520,6 +527,7 @@ void Voxel::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "transparent", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE),
 			"set_transparent", "is_transparent");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "transparency_index"), "set_transparency_index", "get_transparency_index");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "occludes_neighbors"), "set_occludes_neighbors", "get_occludes_neighbors");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "random_tickable"), "set_random_tickable", "is_random_tickable");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "material_id"), "set_material_id", "get_material_id");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "geometry_type", PROPERTY_HINT_ENUM, "None,Cube,CustomMesh"),

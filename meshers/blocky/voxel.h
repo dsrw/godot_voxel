@@ -63,10 +63,16 @@ public:
 		uint8_t transparency_index;
 		bool contributes_to_ao;
 		bool empty;
+		// If false, neighbours mesh their faces toward this voxel as if it were
+		// air (no shared-face culling), while this voxel still meshes its own
+		// faces. Invisible-but-collidable voxels use it: they render as nothing
+		// yet keep a collision shell and don't punch holes in adjacent geometry.
+		bool occludes_neighbors = true;
 
 		inline void clear() {
 			model.clear();
 			empty = true;
+			occludes_neighbors = true;
 		}
 	};
 
@@ -102,6 +108,9 @@ public:
 
 	void set_transparency_index(int i);
 	int get_transparency_index() const { return _transparency_index; }
+
+	void set_occludes_neighbors(bool occludes);
+	bool get_occludes_neighbors() const { return _occludes_neighbors; }
 
 	void set_custom_mesh(Ref<Mesh> mesh);
 	Ref<Mesh> get_custom_mesh() const { return _custom_mesh; }
@@ -165,6 +174,9 @@ private:
 	// If two neighboring voxels are supposed to occlude their shared face,
 	// this index decides wether or not it should happen. Equal indexes culls the face, different indexes doesn't.
 	uint8_t _transparency_index = 0;
+
+	// See BakedData::occludes_neighbors. Default true = normal solid culling.
+	bool _occludes_neighbors = true;
 
 	Color _color;
 	GeometryType _geometry_type;
