@@ -426,6 +426,10 @@ void VoxelTerrain::view_mesh_block(Vector3i bpos, bool mesh_flag, bool collision
 		block = VoxelMeshBlock::create(bpos, get_mesh_block_size(), 0);
 		block->set_world(get_world());
 		_mesh_map.set_block(bpos, block);
+		// Frame-animation receivers track per-block display state; a block
+		// (re)created here knows nothing of what they installed before, so
+		// they must forget it and re-install on the next flip.
+		emit_signal(VoxelStringNames::get_singleton()->mesh_block_created, bpos.to_vec3());
 	}
 
 	if (mesh_flag) {
@@ -1668,6 +1672,7 @@ void VoxelTerrain::_bind_methods() {
 			&VoxelTerrain::set_greedy_meshing);
 	ClassDB::bind_method(D_METHOD("get_greedy_meshing"), &VoxelTerrain::get_greedy_meshing);
 	ClassDB::bind_method(D_METHOD("get_viewer_distance_scale"), &VoxelTerrain::get_viewer_distance_scale);
+	ADD_SIGNAL(MethodInfo("mesh_block_created", PropertyInfo(Variant::VECTOR3, "block_position")));
 	ADD_SIGNAL(MethodInfo("frame_mesh_baked", PropertyInfo(Variant::VECTOR3, "block_position"),
 			PropertyInfo(Variant::INT, "tag"),
 			PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh")));

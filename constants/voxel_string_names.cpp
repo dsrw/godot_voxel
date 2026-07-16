@@ -21,6 +21,7 @@ VoxelStringNames::VoxelStringNames() {
 
 	block_loaded = StaticCString::create("block_loaded");
 	frame_mesh_baked = StaticCString::create("frame_mesh_baked");
+	mesh_block_created = StaticCString::create("mesh_block_created");
 	block_unloaded = StaticCString::create("block_unloaded");
 
 	store_colors_in_texture = StaticCString::create("store_colors_in_texture");
