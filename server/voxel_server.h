@@ -8,6 +8,7 @@
 #include "struct_db.h"
 #include "voxel_thread_pool.h"
 #include <scene/main/node.h>
+#include <scene/resources/mesh.h>
 
 #include <memory>
 
@@ -56,6 +57,13 @@ public:
 		// touch blocks. `tag` echoes the caller's identifier (content key).
 		bool frame_bake = false;
 		int64_t tag = 0;
+		// Frame-bake results assembled on the worker: the render mesh
+		// (VisualServer runs multi-threaded, so mesh creation is queue-safe
+		// off-main) and the extracted collision triangle soup (pure CPU).
+		// Main only builds the physics shape from the faces — PhysicsServer
+		// isn't thread-safe in debug builds.
+		Ref<Mesh> baked_mesh;
+		PoolVector<Vector3> collision_faces;
 	};
 
 	struct BlockDataOutput {
@@ -136,10 +144,13 @@ public:
 	void request_block_mesh(uint32_t volume_id, const BlockMeshInput &input);
 
 	// Mesh an explicit padded buffer on the worker pool — a pure function
-	// of the supplied data (frame animation bakes). The result arrives at
+	// of the supplied data (frame animation bakes). The worker also
+	// assembles the render mesh (with `materials`) and, when
+	// `bake_collision`, extracts the collision faces. The result arrives at
 	// the volume's mesh_output_callback with frame_bake set.
 	void request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
-			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy);
+			std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy,
+			std::vector<Ref<Material>> materials, bool bake_collision);
 	// TODO Add parameter to skip stream loading
 	// Enu: `enu_chunk` (raw compressed snapshot bytes for this block, supplied by
 	// the receiver on the main thread) and `palette_slots` (static-palette-index →
@@ -405,8 +416,14 @@ private:
 		bool cull_down_faces = false;
 		bool greedy = false;
 		// Frame bake: mesh `explicit_voxels` (already padded) instead of
-		// assembling from world blocks.
+		// assembling from world blocks. The worker assembles `baked_mesh`
+		// (and `collision_faces` when `bake_collision`) so main only builds
+		// the physics shape.
 		std::shared_ptr<VoxelBufferInternal> explicit_voxels;
+		std::vector<Ref<Material>> materials;
+		bool bake_collision = false;
+		Ref<Mesh> baked_mesh;
+		PoolVector<Vector3> collision_faces;
 		int64_t tag = 0;
 		PriorityDependency priority_dependency;
 		std::shared_ptr<MeshingDependency> meshing_dependency;

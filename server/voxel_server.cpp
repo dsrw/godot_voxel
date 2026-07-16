@@ -368,7 +368,8 @@ void VoxelServer::request_block_mesh(uint32_t volume_id, const BlockMeshInput &i
 }
 
 void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_position,
-		std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy) {
+		std::shared_ptr<VoxelBufferInternal> voxels, int64_t tag, bool cull_down_faces, bool greedy,
+		std::vector<Ref<Material>> materials, bool bake_collision) {
 	const Volume &volume = _world.volumes.get(volume_id);
 	ERR_FAIL_COND(volume.meshing_dependency == nullptr);
 	ERR_FAIL_COND(volume.meshing_dependency->mesher.is_null());
@@ -381,6 +382,8 @@ void VoxelServer::request_frame_mesh(uint32_t volume_id, Vector3i render_block_p
 	r->cull_down_faces = cull_down_faces;
 	r->greedy = greedy;
 	r->explicit_voxels = voxels;
+	r->materials = std::move(materials);
+	r->bake_collision = bake_collision;
 	r->tag = tag;
 	r->meshing_dependency = volume.meshing_dependency;
 	r->data_block_size = volume.data_block_size;
@@ -1446,6 +1449,35 @@ void VoxelServer::BlockMeshRequest::run(VoxelTaskContext ctx) {
 		// pure function of data, independent of any world state.
 		const VoxelMesher::Input input = { *explicit_voxels, lod, cull_down_faces, greedy };
 		mesher->build(surfaces_output, input);
+
+		// Assemble the render mesh here on the worker: the VisualServer runs
+		// multi-threaded (thread_model=2), so mesh creation is queue-safe
+		// off-main. Collision faces are pure CPU. Main receives finished
+		// products and only instantiates the physics shape (PhysicsServer
+		// isn't thread-safe in debug builds). This keeps warm-up bake floods
+		// off the main thread.
+		Ref<ArrayMesh> mesh;
+		mesh.instance();
+		int surface_index = 0;
+		for (int i = 0; i < surfaces_output.surfaces.size(); ++i) {
+			Array surface = surfaces_output.surfaces[i];
+			if (surface.empty() || !is_surface_triangulated(surface)) {
+				continue;
+			}
+			mesh->add_surface_from_arrays(
+					surfaces_output.primitive_type, surface, Array(), surfaces_output.compression_flags);
+			if (i < (int)materials.size()) {
+				mesh->surface_set_material(surface_index, materials[i]);
+			}
+			++surface_index;
+		}
+		if (surface_index > 0) {
+			baked_mesh = mesh;
+			if (bake_collision) {
+				collision_faces = concave_polygon_faces(surfaces_output.surfaces);
+			}
+		}
+
 		has_run = true;
 		return;
 	}
@@ -1495,6 +1527,8 @@ void VoxelServer::BlockMeshRequest::apply_result() {
 			o.frame_bake = explicit_voxels != nullptr;
 			o.tag = tag;
 			o.surfaces = surfaces_output;
+			o.baked_mesh = baked_mesh;
+			o.collision_faces = collision_faces;
 
 			ERR_FAIL_COND(volume->callbacks.mesh_output_callback == nullptr);
 			ERR_FAIL_COND(volume->callbacks.data == nullptr);

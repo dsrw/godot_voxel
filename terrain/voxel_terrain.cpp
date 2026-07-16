@@ -1258,34 +1258,18 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 			++_stats.dropped_block_meshs;
 			return;
 		}
-		Ref<ArrayMesh> mesh;
-		mesh.instance();
-		Vector<Array> collidable_surfaces;
-		int surface_index = 0;
-		for (int i = 0; i < ob.surfaces.surfaces.size(); ++i) {
-			Array surface = ob.surfaces.surfaces[i];
-			if (surface.empty() || !is_surface_triangulated(surface)) {
-				continue;
-			}
-			collidable_surfaces.push_back(surface);
-			mesh->add_surface_from_arrays(
-					ob.surfaces.primitive_type, surface, Array(), ob.surfaces.compression_flags);
-			mesh->surface_set_material(surface_index, _materials[i]);
-			++surface_index;
-		}
-		Ref<Mesh> result;
-		if (surface_index > 0) {
-			result = mesh;
-			// Build the collision shape from the raw arrays now (they're in hand,
-			// no VisualServer round-trip) and stash it on the mesh. This mesh is
-			// cached and re-installed on many chunks via set_block_mesh; carrying
-			// the shape means it's built once and shared, never per-install.
-			if (_generate_collisions) {
-				Ref<Shape> shape = create_concave_polygon_shape(collidable_surfaces);
-				if (shape.is_valid()) {
-					shape->set_margin(_collision_margin);
-					mesh->set_meta("col_shape", shape);
-				}
+		// The worker assembled the render mesh and extracted the collision
+		// faces (see BlockMeshRequest::run). Main only builds the physics
+		// shape — PhysicsServer isn't thread-safe in debug builds — and
+		// stashes it on the mesh. The mesh is cached and re-installed on many
+		// chunks via set_block_mesh; carrying the shape means it's built once
+		// and shared, never per-install.
+		Ref<Mesh> result = ob.baked_mesh;
+		if (result.is_valid() && _generate_collisions && ob.collision_faces.size() >= 3) {
+			Ref<Shape> shape = create_concave_polygon_shape(ob.collision_faces);
+			if (shape.is_valid()) {
+				shape->set_margin(_collision_margin);
+				result->set_meta("col_shape", shape);
 			}
 		}
 		emit_signal(VoxelStringNames::get_singleton()->frame_mesh_baked,
@@ -1460,8 +1444,14 @@ void VoxelTerrain::request_frame_mesh(Vector3 bpos, PoolByteArray values, int64_
 			}
 		}
 	}
+	std::vector<Ref<Material>> materials;
+	materials.reserve(VoxelMesherBlocky::MAX_MATERIALS);
+	for (unsigned int i = 0; i < VoxelMesherBlocky::MAX_MATERIALS; ++i) {
+		materials.push_back(_materials[i]);
+	}
 	VoxelServer::get_singleton()->request_frame_mesh(
-			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces, _greedy);
+			_volume_id, Vector3i::from_floored(bpos), voxels, tag, _cull_down_faces, _greedy,
+			std::move(materials), _generate_collisions);
 }
 
 void VoxelTerrain::set_greedy_meshing(bool enabled) {

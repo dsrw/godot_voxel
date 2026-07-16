@@ -61,7 +61,7 @@ bool try_call_script(
 // Faster version of Mesh::create_trimesh_shape()
 // See https://github.com/Zylann/godot_voxel/issues/54
 //
-Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces) {
+PoolVector<Vector3> concave_polygon_faces(Vector<Array> surfaces) {
 	VOXEL_PROFILE_SCOPE();
 
 	PoolVector<Vector3> face_points;
@@ -79,11 +79,11 @@ Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces) {
 		PoolVector<int> indices = surface_arrays[Mesh::ARRAY_INDEX];
 		face_points_size += indices.size();
 	}
-	face_points.resize(face_points_size);
 
 	if (face_points_size < 3) {
-		return Ref<ConcavePolygonShape>();
+		return PoolVector<Vector3>();
 	}
+	face_points.resize(face_points_size);
 
 	//copy the points into it
 	int face_points_offset = 0;
@@ -95,9 +95,9 @@ Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces) {
 		PoolVector<Vector3> positions = surface_arrays[Mesh::ARRAY_VERTEX];
 		PoolVector<int> indices = surface_arrays[Mesh::ARRAY_INDEX];
 
-		ERR_FAIL_COND_V(positions.size() < 3, Ref<ConcavePolygonShape>());
-		ERR_FAIL_COND_V(indices.size() < 3, Ref<ConcavePolygonShape>());
-		ERR_FAIL_COND_V(indices.size() % 3 != 0, Ref<ConcavePolygonShape>());
+		ERR_FAIL_COND_V(positions.size() < 3, PoolVector<Vector3>());
+		ERR_FAIL_COND_V(indices.size() < 3, PoolVector<Vector3>());
+		ERR_FAIL_COND_V(indices.size() % 3 != 0, PoolVector<Vector3>());
 
 		int face_points_count = face_points_offset + indices.size();
 
@@ -114,9 +114,21 @@ Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces) {
 		face_points_offset += indices.size();
 	}
 
+	return face_points;
+}
+
+Ref<ConcavePolygonShape> create_concave_polygon_shape(PoolVector<Vector3> face_points) {
+	VOXEL_PROFILE_SCOPE();
+	if (face_points.size() < 3) {
+		return Ref<ConcavePolygonShape>();
+	}
 	Ref<ConcavePolygonShape> shape = memnew(ConcavePolygonShape);
 	shape->set_faces(face_points);
 	return shape;
+}
+
+Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces) {
+	return create_concave_polygon_shape(concave_polygon_faces(surfaces));
 }
 
 int get_visible_instance_count(const MultiMesh &mm) {

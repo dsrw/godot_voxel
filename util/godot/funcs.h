@@ -23,6 +23,14 @@ inline bool try_call_script(
 
 Ref<ConcavePolygonShape> create_concave_polygon_shape(Vector<Array> surfaces);
 
+// The pure-CPU half of create_concave_polygon_shape: extract the triangle soup
+// from mesh surfaces. Safe on worker threads (no server calls).
+PoolVector<Vector3> concave_polygon_faces(Vector<Array> surfaces);
+
+// The server half: build the shape (PhysicsServer BVH) from extracted faces.
+// Main thread only — PhysicsServer isn't thread-safe in debug builds.
+Ref<ConcavePolygonShape> create_concave_polygon_shape(PoolVector<Vector3> face_points);
+
 // This API can be confusing so I made a wrapper
 int get_visible_instance_count(const MultiMesh &mm);
 
