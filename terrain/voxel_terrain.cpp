@@ -1391,6 +1391,12 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 
 	const bool gen_collisions = _generate_collisions && block->collision_viewers.get() > 0;
 
+	// Counts real mesh applies only — empty results (air blocks, cleared
+	// content) are bookkeeping, not meshing work.
+	if (surface_index > 0) {
+		++_stats.updated_blocks;
+	}
+
 	block->set_mesh(mesh);
 	if (gen_collisions) {
 		block->set_collision_mesh(collidable_surfaces, get_tree()->is_debugging_collisions_hint(), this,
