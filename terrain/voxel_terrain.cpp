@@ -1245,24 +1245,15 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 	VOXEL_PROFILE_SCOPE();
 	//print_line(String("DDD receive {0}").format(varray(ob.position.to_vec3())));
 
-	// Every sent request produces exactly one output (applied, dropped, or
-	// stale), and they all land here.
-	if (_meshes_in_flight > 0) {
-		--_meshes_in_flight;
-	}
-
-	VoxelMeshBlock *block = _mesh_map.get_block(ob.position);
-	if (block == nullptr) {
-		//print_line("- no longer loaded");
-		// That block is no longer loaded, drop the result
-		++_stats.dropped_block_meshs;
-		return;
-	}
-
 	if (ob.frame_bake) {
-		// Never touches blocks: assemble the mesh and hand it to the
-		// receiver. A dropped bake (library re-bake in flight) just
-		// vanishes — receivers re-request on timeout.
+		// Never touches blocks and never joined _meshes_in_flight: deliver the
+		// mesh to the receiver even when the render block isn't loaded — the
+		// receiver caches it and installs once the block pairs. (This branch
+		// must run BEFORE the block lookup below: dropping unpaired bakes
+		// starved the frame cache forever, because the receiver re-requests on
+		// timeout and every retry's result was dropped again.) A dropped bake
+		// (library re-bake in flight) just vanishes — receivers re-request on
+		// timeout.
 		if (ob.type == VoxelServer::BlockMeshOutput::TYPE_DROPPED) {
 			++_stats.dropped_block_meshs;
 			return;
@@ -1299,6 +1290,21 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		}
 		emit_signal(VoxelStringNames::get_singleton()->frame_mesh_baked,
 				ob.position.to_vec3(), ob.tag, result);
+		return;
+	}
+
+	// Every sent pipeline request produces exactly one output (applied,
+	// dropped, or stale), and they all land here. Frame bakes returned above:
+	// they never incremented this counter.
+	if (_meshes_in_flight > 0) {
+		--_meshes_in_flight;
+	}
+
+	VoxelMeshBlock *block = _mesh_map.get_block(ob.position);
+	if (block == nullptr) {
+		//print_line("- no longer loaded");
+		// That block is no longer loaded, drop the result
+		++_stats.dropped_block_meshs;
 		return;
 	}
 
