@@ -110,6 +110,7 @@ Ref<Voxel> VoxelLibrary::create_voxel(unsigned int id, String name) {
 	voxel->set_id(id);
 	voxel->set_voxel_name(name);
 	_voxel_types[id] = voxel;
+	_needs_baking = true; // caller mutates the returned voxel (color/material/geometry)
 	return voxel;
 }
 
@@ -156,11 +157,23 @@ static void rasterize_triangle_barycentric(Vector2 a, Vector2 b, Vector2 c, F ou
 }
 
 void VoxelLibrary::bake() {
+	// Already baked since the last change: nothing to do. VoxelTerrain::set_mesher
+	// calls bake() on every scene instantiation, and the library is shared across
+	// every terrain node — without this guard a level with N build nodes re-bakes
+	// the whole (hundreds-of-entries) library N times on the main thread (~400ms
+	// each). Mutations (set_voxel_count / set_voxel / create_voxel / set_atlas_size)
+	// set _needs_baking; the enu color registry sets voxel_count as it grows, so a
+	// genuine change is never missed.
+	if (!_needs_baking) {
+		return;
+	}
+
 	RWLockWrite lock(_baked_data_rw_lock);
 
 	const uint64_t time_before = OS::get_singleton()->get_ticks_usec();
 
 	// This is the only place we modify the data.
+	_needs_baking = false;
 
 	_baked_data.models.resize(_voxel_types.size());
 	for (size_t i = 0; i < _voxel_types.size(); ++i) {
