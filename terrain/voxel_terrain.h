@@ -129,6 +129,12 @@ public:
 	// means every submitted edit is meshed and visible.
 	int get_pending_block_updates() const;
 
+	// False until the required-block set has been computed for a paired viewer
+	// and its load requests issued. Before that, get_pending_block_updates()
+	// reads 0 with nothing actually loaded — "not started yet" is otherwise
+	// indistinguishable from "done".
+	bool has_stream_started() const;
+
 	// For convenience, this is actually stored in a particular type of mesher
 	Ref<VoxelLibrary> get_voxel_library() const;
 
@@ -251,6 +257,9 @@ private:
 	// apply_mesh_update runs for the result (applied, dropped, or stale).
 	// Only touched on the main thread (send loop and time-spread tasks).
 	int _meshes_in_flight = 0;
+
+	// See has_stream_started().
+	bool _stream_started = false;
 
 	Ref<VoxelStream> _stream;
 	Ref<VoxelMesher> _mesher;

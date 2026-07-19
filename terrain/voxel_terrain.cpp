@@ -595,6 +595,10 @@ int VoxelTerrain::get_pending_block_updates() const {
 		   int(_blocks_pending_update.size()) + _meshes_in_flight;
 }
 
+bool VoxelTerrain::has_stream_started() const {
+	return _stream_started;
+}
+
 void VoxelTerrain::start_updater() {
 	Ref<VoxelMesherBlocky> blocky_mesher = _mesher;
 	if (blocky_mesher.is_valid()) {
@@ -1060,6 +1064,24 @@ void VoxelTerrain::process_viewers() {
 						});
 					}
 				}
+			}
+		}
+	}
+
+	if (stream_enabled && !_stream_started) {
+		// Streaming has genuinely begun: a paired viewer demands meshes over a
+		// real area, its required set has been computed, and the view requests
+		// for it were issued this pass. Until then get_pending_block_updates()
+		// reads 0 because nothing has been requested yet — indistinguishable
+		// from "fully loaded" — so loading-completion checks must gate on this
+		// flag. The mesh box (not the data box) is the test: a freshly paired
+		// viewer can spend passes with visuals or view distance not yet
+		// populated, and its degenerate boxes would arm the flag with nothing
+		// actually demanded.
+		for (size_t i = 0; i < _paired_viewers.size(); ++i) {
+			if (!_paired_viewers[i].state.mesh_box.is_empty()) {
+				_stream_started = true;
+				break;
 			}
 		}
 	}
@@ -1709,6 +1731,7 @@ void VoxelTerrain::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_statistics"), &VoxelTerrain::_b_get_statistics);
 	ClassDB::bind_method(D_METHOD("get_pending_block_updates"), &VoxelTerrain::get_pending_block_updates);
+	ClassDB::bind_method(D_METHOD("has_stream_started"), &VoxelTerrain::has_stream_started);
 	ClassDB::bind_method(D_METHOD("get_voxel_tool"), &VoxelTerrain::get_voxel_tool);
 
 	ClassDB::bind_method(D_METHOD("save_modified_blocks"), &VoxelTerrain::_b_save_modified_blocks);
