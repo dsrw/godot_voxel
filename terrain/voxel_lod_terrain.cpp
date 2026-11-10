@@ -1908,6 +1908,10 @@ void VoxelLodTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) 
 
 	ERR_FAIL_COND(!is_inside_tree());
 
+	if (ob.type == VoxelServer::BlockMeshOutput::TYPE_SUPERSEDED) {
+		return;
+	}
+
 	if (ob.lod >= _lod_count) {
 		// Sorry, LOD configuration changed, drop that mesh
 		++_stats.dropped_block_meshs;

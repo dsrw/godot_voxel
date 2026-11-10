@@ -45,7 +45,11 @@ public:
 	struct BlockMeshOutput {
 		enum Type {
 			TYPE_MESHED, // Contains mesh
-			TYPE_DROPPED // Indicates the meshing was cancelled
+			TYPE_DROPPED, // Indicates the meshing was cancelled
+			// Requested under a meshing dependency that has since been
+			// replaced (mesher, stream or generator changed). Carries nothing;
+			// it only accounts for the request.
+			TYPE_SUPERSEDED
 		};
 
 		Type type;

@@ -1310,6 +1310,11 @@ void VoxelTerrain::apply_mesh_update(const VoxelServer::BlockMeshOutput &ob) {
 		--_meshes_in_flight;
 	}
 
+	if (ob.type == VoxelServer::BlockMeshOutput::TYPE_SUPERSEDED) {
+		// Nothing to apply: the request's dependency is gone.
+		return;
+	}
+
 	VoxelMeshBlock *block = _mesh_map.get_block(ob.position);
 	if (block == nullptr) {
 		//print_line("- no longer loaded");

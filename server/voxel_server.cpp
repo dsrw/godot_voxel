@@ -1533,6 +1533,16 @@ void VoxelServer::BlockMeshRequest::apply_result() {
 			ERR_FAIL_COND(volume->callbacks.mesh_output_callback == nullptr);
 			ERR_FAIL_COND(volume->callbacks.data == nullptr);
 			volume->callbacks.mesh_output_callback(volume->callbacks.data, o);
+
+		} else if (explicit_voxels == nullptr) {
+			// The volume still counts this request as in flight. Frame bakes
+			// aren't counted; their receivers re-request on timeout.
+			BlockMeshOutput o;
+			o.type = BlockMeshOutput::TYPE_SUPERSEDED;
+			o.position = position;
+			o.lod = lod;
+			ERR_FAIL_COND(volume->callbacks.mesh_output_callback == nullptr);
+			volume->callbacks.mesh_output_callback(volume->callbacks.data, o);
 		}
 
 	} else {
