@@ -77,9 +77,8 @@ static inline void mb_axis_set(Vector3 &v, int a, float val) {
 }
 
 // Per-corner AO shading for one face (mirrors generate_blocky_mesh). Enu bakes
-// AO into vertex colours and its "air" model contributes to AO, so exposed
-// faces are never fully lit — instead the greedy pass merges faces whose four
-// corners share ONE shade value, which a single flat colour reproduces exactly.
+// AO into vertex colours, so the greedy pass merges faces whose four corners
+// share ONE shade value, which a single flat colour reproduces exactly.
 // Returns that common shade (0..3) if the face is uniformly shaded, else -1.
 template <typename Type_T>
 static int mb_face_uniform_shade(const Span<Type_T> type_buffer, int voxel_index, int side,
@@ -332,7 +331,11 @@ static void generate_blocky_mesh(
 	const Vector3i min = Vector3i(VoxelMesherBlocky::PADDING);
 	const Vector3i max = block_size - Vector3i(VoxelMesherBlocky::PADDING);
 
-	int index_offsets[VoxelMesherBlocky::MAX_MATERIALS] = { 0 };
+	// The greedy pass may already have written vertices; index after them.
+	int index_offsets[VoxelMesherBlocky::MAX_MATERIALS];
+	for (unsigned int i = 0; i < VoxelMesherBlocky::MAX_MATERIALS; ++i) {
+		index_offsets[i] = out_arrays_per_material[i].positions.size();
+	}
 
 	VoxelFixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut;
 	side_neighbor_lut[Cube::SIDE_LEFT] = row_size;
@@ -556,7 +559,7 @@ static void generate_blocky_mesh(
 											}
 										}
 									}
-									const float gs = 1.0 - shade;
+									const float gs = 1.0 - CLAMP(shade, 0.0f, 1.0f);
 									w[i] = Color(gs, gs, gs) * modulate_color;
 								}
 
