@@ -224,7 +224,9 @@ void VoxelLibrary::generate_side_culling_matrix() {
 		}
 
 		Voxel::BakedData &model_data = _baked_data.models[type_id];
-		model_data.contributes_to_ao = true;
+		// A voxel that doesn't hide its neighbors (glass, invisible walls)
+		// doesn't shade them either.
+		model_data.contributes_to_ao = model_data.occludes_neighbors;
 
 		for (uint16_t side = 0; side < Cube::SIDE_COUNT; ++side) {
 			const std::vector<Vector3> &positions = model_data.model.side_positions[side];
